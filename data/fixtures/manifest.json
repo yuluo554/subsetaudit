@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "fonttools_version": "4.57.0",
+  "note": "产物不入仓；本清单由 tools/gen_fixtures.py 全量运行时生成。",
+  "fixtures": [
+    {
+      "id": "F1",
+      "name": "fstype-nosubset",
+      "font": "fstype-nosubset.ttf",
+      "bytes": 1528,
+      "sha256": "57b17d44cf01ee509a2de4e2deee27acabd5871d1429bae7acf508b2de422c08"
+    },
+    {
+      "id": "F2",
+      "name": "fstype-multibit-v0",
+      "font": "fstype-multibit-v0.ttf",
+      "bytes": 1512,
+      "sha256": "99d7c5f5a9dfeb9d0abbbbb677319e56e7e1ccac820457c49e1f10981f2919c5"
+    },
+    {
+      "id": "F3",
+      "name": "fstype-multibit-v3",
+      "font": "fstype-multibit-v3.ttf",
+      "bytes": 1528,
+      "sha256": "7a33691eec2ded735943b9c90fb4a77f9a6d823363bf9e3ffd11a54b7a34b90e"
+    },
+    {
+      "id": "F4",
+      "name": "silent-drop",
+      "font": "subset.ttf",
+      "bytes": 960,
+      "sha256": "6ed2d904195703b0c5547ca5d783a3af3e918bc0d5702585b0fcc124e734acbb"
+    },
+    {
+      "id": "F5",
+      "name": "metadata-stripped",
+      "font": "subset.ttf",
+      "bytes": 960,
+      "sha256": "6ed2d904195703b0c5547ca5d783a3af3e918bc0d5702585b0fcc124e734acbb"
+    },
+    {
+      "id": "F6",
+      "name": "codepage-mismatch",
+      "font": "subset.ttf",
+      "bytes": 940,
+      "sha256": "fcb3c98f4c656a6e669b49f32171feb36909d02d7d3b96b5c0c2ef1a35d92211"
+    }
+  ]
+}

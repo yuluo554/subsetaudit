@@ -1,0 +1,76 @@
+{
+  "id": "F5",
+  "name": "metadata-stripped",
+  "font": "subset.ttf",
+  "input": {
+    "synthetic": true,
+    "source": "source.ttf",
+    "subset": "subset.ttf",
+    "source_name_ids": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      13,
+      14
+    ],
+    "source_name_languages": [
+      0,
+      1033,
+      1041
+    ],
+    "subset_options": {
+      "name_IDs": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "name_languages": [
+        1033
+      ]
+    }
+  },
+  "expect": {
+    "subset_name_ids": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "subset_name_languages": [
+      1033
+    ],
+    "missing_name_ids": [
+      13,
+      14
+    ],
+    "missing_classification": "default_stripped",
+    "name_language_count": 1,
+    "expected_findings": [
+      {
+        "code": "NAME_LICENSE_DESCRIPTION_STRIPPED",
+        "severity": "warn",
+        "primary_key": "nameID13",
+        "spec_ref": "MS-NAME nameID13"
+      },
+      {
+        "code": "NAME_LICENSE_INFO_URL_STRIPPED",
+        "severity": "warn",
+        "primary_key": "nameID14",
+        "spec_ref": "MS-NAME nameID14"
+      }
+    ],
+    "counterexample_guard": "只有拿到 --source 且原文确有 13/14 时，才可判『默认剥离』；原文也没有则判『原作者没写』"
+  },
+  "fonttools_version": "4.57.0"
+}

@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "note": "只登记 OFL/开源许可字体；字体二进制不入仓。tools/fetch_fonts.py --check 离线校验本文件；--download 才联网。口径见 data/README.md §八。",
+  "fonts": [
+    {
+      "name": "InterVariable.ttf",
+      "family": "Inter",
+      "release": "4.1",
+      "style": "Variable (roman)",
+      "license": "OFL-1.1",
+      "url": "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip",
+      "archive": {
+        "bytes": 33707794,
+        "sha256": "9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e"
+      },
+      "archive_member": "InterVariable.ttf",
+      "bytes": 879708,
+      "sha256": "4989b125924991b90d05b2d16e0e388c48f7d5bb8b30539bbf9c755278d0ccaf",
+      "verified": "2026-10-21",
+      "purpose": "变量字体轴/STAT 保留对照（M4 布局层）；替代关系：原测试用的就是 Inter，一致"
+    },
+    {
+      "name": "NotoSansSC-Regular.otf",
+      "family": "Noto Sans SC",
+      "release": "noto-cjk (SubsetOTF/SC)",
+      "style": "Regular",
+      "license": "OFL-1.1",
+      "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf",
+      "archive": null,
+      "archive_member": null,
+      "bytes": 8331336,
+      "sha256": "faa6c9df652116dde789d351359f3d7e5d2285a2b2a1f04a2d7244df706d5ea9",
+      "verified": "2026-10-21",
+      "purpose": "CJK 码页回退行为（M5 元数据）；替代关系：Microsoft YaHei（商用，不可入库）"
+    },
+    {
+      "name": "NotoSans-Bold.ttf",
+      "family": "Noto Sans",
+      "release": "noto-fonts (hinted/ttf)",
+      "style": "Bold",
+      "license": "OFL-1.1",
+      "url": "https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSans/NotoSans-Bold.ttf",
+      "archive": null,
+      "archive_member": null,
+      "bytes": 575740,
+      "sha256": "c976e4b1b99edc88775377fcc21692ca4bfa46b6d6ca6522bfda505b28ff9d6a",
+      "verified": "2026-10-21",
+      "purpose": "Latin 布局表规模（M4 布局层）；替代关系：Arial / Calibri（商用，不可入库）"
+    }
+  ]
+}

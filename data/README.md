@@ -104,6 +104,24 @@
 
 **站点包 grep**：`site-packages/fontTools/subset/` 全树 `.py` 含 `fsType` 的文件数 = **0**（✅ 实测）→ 子集路径不读嵌入许可。
 
+### 4.1 合成 fixture 实测（✅ 2026-10-21，fontTools 4.57.0 / 4.67.0 双通道）
+
+| # | 事实 | 数值 | 验证方式 |
+|---|---|---|---|
+| 1 | F1 `0x0108` | `may_subset = (0x0108 & 0x0100) == 0` → **false**；`bits = 0x0008` → Editable | `tools/gen_fixtures.py` 生成期自证（独立 OS/2 解析，不经 fontTools 高层 API） |
+| 2 | F2 `0x000E` + v0 | `bits = 0x000E`（3 位并存），`version = 0 ≤ 2` → 最宽松 = **8 Editable**；`may_subset = true`；**无互斥违规** | 同上 |
+| 3 | F3 `0x000E` + v3 | 同上位值，`version = 3 ≥ 3` → **互斥违规**；最宽松仍是 Editable，两者独立成条 | 同上 |
+| 4 | F2 vs F3 的真实差异 | **不是"只差一个字节"**：`OS/2.version`（0 vs 3）**加上** OS/2 表长（**78 B vs 96 B** —— `ulCodePageRange1/2` 自 v0 起才有，v0 表本身 78 B 已含）；`cmap` 与其余表逐字节一致 | `tests/test_fixtures.py::test_f2_and_f3_differ_only_in_os2_version_and_table_length` |
+| 5 | F4 静默丢字 | 源 cmap = `{U+0061,U+0062,U+0063,U+5B57,U+6C49}`；只对 `abc` 子集后产物 cmap = `{U+0061,U+0062,U+0063}` → `LOST_IN_SUBSET = {U+5B57,U+6C49}`，`MISSING_IN_SOURCE = ∅` | 独立 cmap 位解析（format 4 手解）复算 |
+| 6 | F5 元数据剥离 | 源 nameID = `{0..6,13,14}`、语言 = `{0,1033,1041}` → 产物 nameID = `{0..6}`、语言 = `{1033}` | 独立 name 表记录解析 |
+| 7 | F6 码页矛盾 | 源 `ulCodePageRange1 = 0x4001F` → 仅 CJK 子集后产物 = **`0x1`**（Latin-1 回退）；产物 `ulUnicodeRange1 = 0x0` 而 `ulUnicodeRange2` bit59 置位（**正确重算，不构成矛盾**）；产物 cmap 无任何 `≤ U+00FF` 码位 | 独立 OS/2 + cmap 解析 |
+| 8 | 跨 fontTools 版本产物一致性 | **4.57.0 与 4.67.0 生成的 6 组 fixture 二进制逐字节相同**（唯一差异是 `expect.json` 里记录的版本串） | `py tools/gen_fixtures.py --check` 在两条通道各跑一次 |
+| 9 | 确定性（禁时钟） | `FontBuilder` 默认把 `head.created/modified` 设为**当前时钟**（实测：间隔 1.2 s 两次生成 → 字节不同）；`subset` 的 `TTFont.save` 默认 `recalcTimestamp=True` 会再改一次 | 实测对照：钉死 `FIXED_EPOCH = 3155673600` 后两次生成逐字节一致 |
+
+> **推论（写进 HANDOFF-M2）**：`expect.json` 的 `fonttools_version` 必须记录**铸造时的版本**（常量
+> `GOLDEN_FONTOOLS_VERSION`），不能写运行时版本 —— 否则 3.8（4.57.0）与 3.12（4.67.0）两条 CI 通道的
+> `--check` 会在彼此生成的 golden 上互相判红，而二进制其实完全一样。
+
 ## 五、本机系统字体 fsType 分布（✅ 只读实测）
 
 **扫描范围**：`C:\Windows\Fonts\*.ttf` + `*.otf`，**共 560 个字体（face）**；其中 1 个文件（`mstmc.ttf`）`bad sfntVersion` 无法解析，已排除。**`.ttc` 集合字体未计入**（若把每个 ttc 第 1 个 face 计入则为 575 个，口径不同，勿混用）。
@@ -160,6 +178,8 @@
 | 7 | justpdf#278（"`subset_font` 使已子集程序膨胀 27–47%"） | 未能定位仓库/编号（`yeslogic/justpdf` 不存在；同名仓库均无该 issue） | **降为未核实，不作锚点** |
 | 8 | 560 字体的 "restricted 44/560≈7.9%" | 44 是"表面含 bit1"；**版本分流后受限仅 4/560（0.71%）**，40 个 0x000E 在 v0/v1 下应解析为 Editable | 两个数值并列并标注口径（§五） |
 | 9 | Inter "876KB" / Noto Sans SC "17.7MB" | Inter 4.1 `InterVariable.ttf` **879,708 B**；Noto Sans SC Regular（OTF 子集）**8,331,336 B** | 以实测登记（§八） |
+| 10 | "F2 与 F3 只差 `OS/2.version` 一个字节"（M1 生成器初稿注释） | 实测：`OS/2` 表长 **v0 = 78 B / v3+ = 96 B**（`ulCodePageRange` 自 v0 起才有）→ 产物总字节 **1512 vs 1528**；`cmap` 与其余表逐字节一致 | 改文档与生成器说明为"差别只有 version 与表长两处"（§四.1 #4） |
+| 11 | "`expect.json` 记录运行时 fontTools 版本"（M1 生成器初稿） | 3.8 通道写 `4.57.0`、3.12 通道写 `4.67.0`，而**产物二进制逐字节相同** → 跨通道 `--check` 互红 | 改为记录**铸造版本**常量 `GOLDEN_FONTOOLS_VERSION`（§四.1 推论） |
 
 ## 八、数据源可获取性与锁文件口径
 
@@ -167,12 +187,17 @@
 
 | 字体 | 来源（实测可达） | 实测字节数 | sha256 | 状态 |
 |---|---|---|---|---|
-| Inter 4.1（`InterVariable.ttf`，OFL 1.1） | `https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip`（zip 实测 33,707,794 B） | **879,708** | `4989b125924991b90d05b2d16e0e388c48f7d5bb8b30539bbf9c755278d0ccaf` | ✅ 已下载并计算哈希（不保存） |
+| Inter 4.1（`InterVariable.ttf`，OFL 1.1） | `https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip`（zip 实测 33,707,794 B / `sha256:9883fdd4a49d4fb6…`） | **879,708** | `4989b125924991b90d05b2d16e0e388c48f7d5bb8b30539bbf9c755278d0ccaf` | ✅ 已下载并计算哈希（不保存） |
 | Inter 4.1（`extras/ttf/Inter-Regular.ttf`，静态） | 同上 zip | **411,640** | `40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82` | ✅ 同上 |
-| Noto Sans SC Regular（`NotoSansSC-Regular.otf`，OFL 1.1） | `notofonts/noto-cjk` → `Sans/SubsetOTF/SC/` | **8,331,336** | ⬜ 未下载（仅 API 列目录取尺寸） | 由 `fetch_fonts.py` 首次运行时写入 sha256 |
-| Noto Sans CJK SC VF（`NotoSansCJKsc-VF.otf`，OFL 1.1） | `notofonts/noto-cjk` → `Sans/Variable/OTF/` | **30,737,452** | ⬜ 同上 | 同上 |
-| Noto Sans（Latin，`NotoSans-Bold.ttf`，OFL 1.1） | `notofonts/noto-fonts` → `hinted/ttf/NotoSans/` | **575,740** | ⬜ 同上 | 同上 |
+| Noto Sans SC Regular（`NotoSansSC-Regular.otf`，OFL 1.1） | `notofonts/noto-cjk` → `Sans/SubsetOTF/SC/`（raw 直链，见 `data/fonts.lock`） | **8,331,336** | `faa6c9df652116dde789d351359f3d7e5d2285a2b2a1f04a2d7244df706d5ea9` | ✅ **2026-10-21 已下载并实测哈希**（31,036 字形 / OS/2 v3 / cmap 30,890 码位） |
+| Noto Sans CJK SC VF（`NotoSansCJKsc-VF.otf`，OFL 1.1） | `notofonts/noto-cjk` → `Sans/Variable/OTF/` | **30,737,452** | ⬜ 未下载（仅 API 列目录取尺寸） | 备选，首期未纳入锁文件 |
+| Noto Sans（Latin，`NotoSans-Bold.ttf`，OFL 1.1） | `notofonts/noto-fonts` → `hinted/ttf/NotoSans/` | **575,740** | `c976e4b1b99edc88775377fcc21692ca4bfa46b6d6ca6522bfda505b28ff9d6a` | ✅ **2026-10-21 已下载并实测哈希**（3,748 字形 / OS/2 v4 / cmap 2,840 码位） |
 | Source Han Sans（OFL 1.1） | Adobe 官方 release | ⬜ 未实测 | ⬜ | 备选，首期可用 Noto Sans CJK 替代 |
+
+> **下载实测坑（2026-10-21，本机）**：`raw.githubusercontent.com` 直链在本机会被中途重置，
+> 单次 `curl` 只拿到 4.5–7.5 MB（目标 8,331,336 B）。可靠做法 = **HTTP Range 断点续传 + 字节数收敛判定**；
+> `tools/fetch_fonts.py --download` 走的是单次请求，网络不稳时可能报 `DOWNLOAD_FAILED`（不写半截文件，
+> 因为校验在写盘之前）。
 
 **破损样本全部可合成**（**不依赖任何商用字体**）：
 - 改 `fsType`：`TTFont` 读入 → 置 `OS/2.fsType` → 另存（**只用于生成 fixture，产物不入库**）；

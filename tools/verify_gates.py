@@ -181,7 +181,7 @@ def _mark_done(milestone):
     return undo
 
 
-HANDOFF_STUB_INCOMPLETE = "# HANDOFF-M1\n\n## 当前进度\n\n（变异验证用：故意缺节）\n"
+HANDOFF_STUB_INCOMPLETE = "# HANDOFF-M2\n\n## 当前进度\n\n（变异验证用：故意缺节）\n"
 
 
 def _leak_payload(*parts):
@@ -211,15 +211,15 @@ MUTATIONS = [
      lambda: _replace_once("plan/06-交付对标与决策.md",
                            "| CI 实跑 | 无远端，未跑过 | 首次 push 后登记 run id |",
                            "| CI 实跑（M0） | 无远端，未跑过 | 首次 push 后登记 run id |")),
-    ("L4", "M1 标 ✅ 但交接单缺节", LAYOUT, "LAYOUT.HANDOFFS",
-     # 靶子随进度漂移（M0 时 HANDOFF-M1.md 不存在 → 用 _create 造一个缺节的；
-     # M0 收尾后它真实存在了 → 改成把真实文件里的某一节标题改掉）。
-     # 两种形态都只在"M1 已 ✅"时才有意义，所以统一先 _mark_done(1)。
+    # 靶子语义 = "**下一个还没完成的里程碑**翻 ✅ 但交接单缺节"。
+    # 2026-10-21 M1 收尾时把靶子从 M1 移到 M2：M1 已 ✅，`_mark_done(1)` 会在
+    # "M1 行本来就不是 ⬜" 处断言失败 → SKIP（不是 PASS）。靶子必须打"当前是 ⬜ 的那个"。
+    ("L4", "M2 标 ✅ 但交接单缺节", LAYOUT, "LAYOUT.HANDOFFS",
      lambda: _chain(
-         lambda: _mark_done(1),
-         (lambda: _create("plan/HANDOFF-M1.md", HANDOFF_STUB_INCOMPLETE))
-         if not os.path.exists(path_of("plan/HANDOFF-M1.md"))
-         else (lambda: _replace_once("plan/HANDOFF-M1.md", "## 五、本机环境坑", "## 五、环境"))
+         lambda: _mark_done(2),
+         (lambda: _create("plan/HANDOFF-M2.md", HANDOFF_STUB_INCOMPLETE))
+         if not os.path.exists(path_of("plan/HANDOFF-M2.md"))
+         else (lambda: _replace_once("plan/HANDOFF-M2.md", "## 五、本机环境坑", "## 五、环境"))
      )),
     ("L5", "删 plan/00 顶部装订行", LAYOUT, "LAYOUT.BINDING_HEAD",
      lambda: _replace_once("plan/00-README总览.md",
@@ -240,11 +240,12 @@ MUTATIONS = [
     # L9 的语义是"**已 ✅ 的里程碑**在台账里仍挂未完成标记"，所以必须先让 M1 翻 ✅
     # 再往台账写 `⬜ 待 M1` —— 否则 M1 本来就没完成，这一行是**正确状态**，不该红
     # （变异验证首版就瞄错了靶子：靶子挑错时"没红"不代表门假）。
-    ("L9", "M1 已 ✅ 但台账里仍写 ⬜ 待 M1", LAYOUT, "LAYOUT.LEDGER",
-     lambda: _chain(lambda: _mark_done(1),
+    ("L9", "M2 已 ✅ 但台账里仍写 ⬜ 待 M2", LAYOUT, "LAYOUT.LEDGER",
+     # 2026-10-21 M1 收尾：靶子从 M1 移到 M2（M1 已 ✅，再 _mark_done(1) 会 SKIP）。
+     lambda: _chain(lambda: _mark_done(2),
                     lambda: _replace_once("plan/00-README总览.md",
                                           "| 定位宣言含\"审产物不审项目\" | plan/01 §头部、README | ✅ 已写 |",
-                                          "| 定位宣言含\"审产物不审项目\" | plan/01 §头部、README | ⬜ 待 M1 验证 |"))),
+                                          "| 定位宣言含\"审产物不审项目\" | plan/01 §头部、README | ⬜ 待 M2 验证 |"))),
     ("L10", "发布里程碑 ✅ 但删掉 RELEASE 留档", LAYOUT, "LAYOUT.RELEASE",
      lambda: _mark_done(6)),
     ("L11", "文档点名一个不存在的 tools/*.py", LAYOUT, "LAYOUT.DOC_TOOLS",
@@ -252,7 +253,10 @@ MUTATIONS = [
                            "## 3. 验收门（每棒都要过的门，按顺序）",
                            "## 3. 验收门（每棒都要过的门，按顺序）\n\n> 变异验证用：`tools/does_not_exist.py`\n")),
     ("L12", "PENDING_TOOLS 里的工具所属里程碑翻 ✅（登记项未清理）", LAYOUT, "LAYOUT.DOC_TOOLS",
-     lambda: _mark_done(1)),
+     # 2026-10-21 M1 收尾：M1 的两条登记已按纪律删除，PENDING_TOOLS 只剩
+     # `tools/check_release.py: 6` → 靶子必须打 M6（翻 ✅ 后登记项必须自清理）。
+     # 注意 M6 翻 ✅ 同时会让 LAYOUT.RELEASE 红，但本组只认 DOC_TOOLS 那一条。
+     lambda: _mark_done(6)),
     ("V1", "写一行绝对会话路径", DESENS, "absolute-session-path",
      lambda: _replace_once("plan/06-交付对标与决策.md", "## 4. 风险登记",
                            "## 4. 风险登记\n\n<!-- 变异验证用：%s -->\n" % LEAK_ABSOLUTE)),

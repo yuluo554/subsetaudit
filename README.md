@@ -5,7 +5,7 @@
 **审的是产物，不是字体项目。** 输入 = 原字体 + 子集字体 + 必须支持的字符集；
 输出 = 子集是否真覆盖、GSUB/GPOS 是否被弄坏、许可是否允许子集、元数据是否被剥掉。
 
-- **版本**：v0.1.0.dev0（M0 骨架）
+- **版本**：v0.1.0.dev0（M1 数据层完成，判定待 M2–M5）
 - **交付形态**：纯本地 **Python CLI**（零网络、零模型、零商用字体）
 - **运行期依赖**：`fonttools`（唯一）｜**Python** ≥ 3.8
 
@@ -35,20 +35,21 @@ py -m venv .venv
 > **前置条件**：`pip install -e .` 需要 pip ≥ 21.3（PEP 660）。Python 3.8 的 `venv` 自带
 > pip 20.2.3，**不先升级会报** `editable mode currently requires a setup.py based build`。
 
-## 现状（M0 骨架）
+## 现状（M1 数据先行完成）
 
 | 里程碑 | 内容 | 状态 |
 |---|---|---|
 | M0 | 方法论装订 + 计划套件 + 可运行骨架 | ✅ |
-| M1 | 数据先行：F1–F6 fixture 生成器 + `fonts.lock` | ⬜ |
+| M1 | 数据先行：F1–F6 fixture 生成器 + `fonts.lock` | ✅ |
 | M2 | `license-gate` 许可闸门（`OS/2.version` 分流） | ⬜ |
 | M3 | `coverage-diff` 覆盖差集（三分类 + 回退链） | ⬜ |
 | M4 | `layout-survival` 布局保真（Type 7 解包） | ⬜ |
 | M5 | `metadata` + `report`（cmap↔OS/2 交叉一致性） | ⬜ |
 | M6 | 发布：GitHub 公开仓库 v0.1.0 | ⬜ |
 
-> 状态语义：`✅` 已完成、`⬜` 未开始。**M0 的五个子命令能跑、退出码正确，但判定尚未实现**，
+> 状态语义：`✅` 已完成、`⬜` 未开始。**五个子命令能跑、退出码正确，但判定尚未实现**，
 > 每个命令会输出 `SKIPPED(reason=module_not_implemented_in_m0)` —— 这是**显式跳过**，不是静默通过。
+> M1 只落**数据层**（fixture 生成器 + OFL 字体锁文件），不改变任何子命令的行为。
 
 ## 三个场景（最小复现命令）
 
@@ -128,11 +129,14 @@ py tools/verify_gates.py            # 两道门的变异验证（16 组必须全
 py -X utf8 -m pytest -q
 ```
 
-后续里程碑（M1 起）会用到这些脚本，**当前尚未实现**（见 `plan/05` 与 `plan/06` 缺口表）：
+后续里程碑（M2 起）会用到这些脚本，**当前尚未实现**（见 `plan/05` 与 `plan/06` 缺口表）：
 
-- `tools/gen_fixtures.py` — 生成 F1–F6 合成破损 fixture（含 `--check` 位级一致）
-- `tools/fetch_fonts.py` — 校验 / 下载 `data/fonts.lock` 登记的 OFL 字体（默认 `--check` 离线）
 - `tools/check_release.py` — 发布终态门（M6）
+
+数据层（M1，已落地）：
+
+- `tools/gen_fixtures.py` — 生成 F1–F6 合成破损 fixture（`--check` 位级一致、`--only` 部分运行）
+- `tools/fetch_fonts.py` — 校验 / 下载 `data/fonts.lock` 登记的 OFL 字体（默认 `--check` 离线）
 
 ## 文档
 

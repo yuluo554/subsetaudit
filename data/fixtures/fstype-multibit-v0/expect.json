@@ -1,0 +1,39 @@
+{
+  "id": "F2",
+  "name": "fstype-multibit-v0",
+  "font": "fstype-multibit-v0.ttf",
+  "input": {
+    "synthetic": true,
+    "cmap": {
+      "0x0061": "a",
+      "0x0062": "b",
+      "0x0063": "c"
+    },
+    "fsType": "0x000E",
+    "os2_version": 0
+  },
+  "expect": {
+    "os2_version": 0,
+    "fsType": "0x000E",
+    "permission_bits": "0x000E",
+    "permission_name": "Editable",
+    "permission_resolution": "least_restrictive",
+    "may_subset": true,
+    "bit8_no_subsetting": false,
+    "bit9_bitmap_only": false,
+    "reserved_bits_set": false,
+    "mutual_exclusion_violation": false,
+    "pending_conclusions": {
+      "keys": [
+        "embed_pdf",
+        "embed_app",
+        "embed_web",
+        "may_modify"
+      ],
+      "reason": "data/README.md §六.1 目前只定义了 may_subset 与保留位掩码；其余四条由 M2 先写入口径表再实现（plan/01 §三 禁第二套口径）"
+    },
+    "expected_findings": [],
+    "counterexample_guard": "v0 的 bits0–3 多位并存必须解析为最宽松权限，不得误报互斥"
+  },
+  "fonttools_version": "4.57.0"
+}
