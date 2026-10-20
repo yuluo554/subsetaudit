@@ -22,7 +22,7 @@
 | **M4 两条 SKIPPED** | ✅ | 两侧都无 → `no_layout_tables` + `summary == {}` + rc 0；只有一侧 → `layout_tables_missing_on_one_side` 且**照常判定**（`detail` 带 `source:`/`subset:`） |
 | **M4 测试** | ✅ | `tests/test_layout_survival.py` **37 项**（三方对齐 / 三元组与去重 / 默认丢弃 / 全量丢失 / 改名与丢失互斥 / 两条 SKIPPED / rc 0 与 1 / 双跑 / 口径对账 / **5 组变异** / 真实 OFL 回归 / 反向骨架断言）；全量 **194 项**，3.8 与 3.12 **两通道全绿** |
 | **M4 实测回填** | ✅ | `data/README.md` §四.1 **#12–#14**（OFL 无 Extension / 商用 Arial 784 只读观察 / 合成样本同构复现）、§七 **#12–#13**（`layout_features` 67 vs 68；GPOS Extension 是 **Type 9** 不是 7） |
-| M5 `metadata` + `report` | ⬜ | 未开始：仍返回 `SKIPPED(reason=module_not_implemented_in_m0)` |
+| M5 `metadata` + `report` | ✅ | 见 `plan/HANDOFF-M6.md` §一（M5 收尾的完整证据表）与 `plan/05` 的「M5 落地实测」 |
 
 ## 二、当前事实·状态不变量（下一棒动手前必须知道，否则一定会踩）
 
@@ -169,23 +169,23 @@
 
 ## 六、DoD 逐项 checklist（M5）
 
-- [ ] `data/README.md` 新增元数据口径节（name 存活判据 / 码页↔cmap 判定式 / `ulUnicodeRange` 反例守护 / `maxp` / 首末码位 / report 聚合口径）
-- [ ] `metadata.evaluate(subset_path, source_path=None)` 返回 `(findings, skips, summary)`
-- [ ] F6：`ulCodePageRange1=0x1` 而 cmap 无 Latin-1 → 报矛盾
-- [ ] `ulUnicodeRange1=0` 而 `ulUnicodeRange2` bit59 置位 → **不报**矛盾（F6 上的反例守护）
-- [ ] F5：缺 nameID 13/14 分"默认剥离"与"原作者没写"两类（有 `--source` 才能分；无源时**不分**）
-- [ ] `maxp.numGlyphs == 实际字形数` → 不报发现
-- [ ] 无 `OS/2` / 无 `name` → 各自一条 `SKIPPED`，`summary` 为空、退出码 0
-- [ ] `report` 聚合**只有一条路径**（`report.evaluate` 与 `cli._run_report` 不共存两套）
-- [ ] 报告双跑 JSON 逐字节一致；不含时间戳/绝对路径
-- [ ] 退出码 0/1/2 三档各有 fixture；输入夹非字体文件 → 2 且指明文件
-- [ ] `tests/test_metadata.py` / `tests/test_report.py` 存在且全绿；**改坏实现至少一层测试必红**
-- [ ] `tests/test_cli.py` 的骨架列表已删 `metadata` 并补反向断言
-- [ ] 双解释器测试全绿（3.8 全局 / 3.12 venv）
-- [ ] `py tools/check_sprint_layout.py` / `check_desensitized.py` 全绿
-- [ ] `py tools/verify_gates.py` 16 项全符合预期、0 SKIP（靶子已按 §二.8 处理）
-- [ ] `py tools/gen_fixtures.py --check` 位级一致
-- [ ] `plan/HANDOFF-M6.md` 已落盘（七节）
+- [x] `data/README.md` 新增元数据口径节（name 存活判据 / 码页↔cmap 判定式 / `ulUnicodeRange` 反例守护 / `maxp` / 首末码位 / report 聚合口径）
+- [x] `metadata.evaluate(subset_path, source_path=None)` 返回 `(findings, skips, summary)`
+- [x] F6：`ulCodePageRange1=0x1` 而 cmap 无 Latin-1 → 报矛盾
+- [x] `ulUnicodeRange1=0` 而 `ulUnicodeRange2` bit59 置位 → **不报**矛盾（F6 上的反例守护）
+- [x] F5：缺 nameID 13/14 分"默认剥离"与"原作者没写"两类（有 `--source` 才能分；无源时**不分**）
+- [x] `maxp.numGlyphs == 实际字形数` → 不报发现
+- [x] 无 `OS/2` / 无 `name` → 各自一条 `SKIPPED`，`summary` 为空、退出码 0
+- [x] `report` 聚合**只有一条路径**（`report.evaluate` 与 `cli._run_report` 不共存两套）
+- [x] 报告双跑 JSON 逐字节一致；不含时间戳/绝对路径
+- [x] 退出码 0/1/2 三档各有 fixture；输入夹非字体文件 → 2 且指明文件
+- [x] `tests/test_metadata.py` / `tests/test_report.py` 存在且全绿；**改坏实现至少一层测试必红**
+- [x] `tests/test_cli.py` 的骨架列表已删 `metadata` 并补反向断言
+- [x] 双解释器测试全绿（3.8 全局 / 3.12 venv）
+- [x] `py tools/check_sprint_layout.py` / `check_desensitized.py` 全绿
+- [x] `py tools/verify_gates.py` 16 项全符合预期、0 SKIP（靶子已按 §二.8 处理）
+- [x] `py tools/gen_fixtures.py --check` 位级一致
+- [x] `plan/HANDOFF-M6.md` 已落盘（七节）
 
 ## 七、关键命令速查
 

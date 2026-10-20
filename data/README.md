@@ -122,6 +122,8 @@
 | **12** | **三个 OFL 字体都没有 Extension lookup（GSUB 无 Type 7，GPOS 无 Type 9）** | GSUB：`NotoSansSC` 15 / `NotoSans-Bold` 46 / `InterVariable` 90 个 lookup，**Type 7 = 0**；GPOS：10 / 9 / 10 个 lookup，**Type 9 = 0**。故这 3 个字体上 `naive == raw`（见 §六.5.2） | `TTFont(lazy=True)` 只读遍历；`tests/test_layout_survival.py` 的真实字体回归 |
 | **13** | **商用字体的 Extension 只作只读观察**（Arial / Calibri，**不复制、不入库、不可复现**） | `arial.ttf` GSUB：**92 个 lookup 全为 Type 7**、解包后 **196** 个子表、连字规则 **naive=0 / 解包后=784**；GPOS：134 个 lookup **全为 Type 9**、332 子表。`calibri.ttf` GSUB：296 个 Type 7、538 子表、规则 **naive=0 / 解包后=10119**；GPOS：254 个 Type 9、560 子表 | 本机只读 `TTFont(lazy=True)` 一次遍历（`_scratch` 原型，不入仓）；**仓库内以合成字体同构复现**（表 14） |
 | **14** | **合成字体上 `naive=0 / 解包后=1` 可复现**（替代商用字体那组对照） | `_scratch/src_ext.ttf`（程序合成，3 lookup / 3 字形）：把 `liga` 与 `ss01` 两条 lookup 包成 Type 7 → GSUB 外层 `{7:2, 1:1}`、`ExtensionLookupType` 解包出 `{1:1, 4:1}`；连字规则 **naive = 0、解包后 = 1**；`layout_features='*'` 保留 2 条三元组、默认保留 1 条、`''` 保留 0 条 | `tests/test_layout_survival.py::test_naive_count_is_zero_only_when_extension_is_not_unwrapped` 等（测试内合成，落 `tmp_path`） |
+| **15** | **元数据判定的误报率实测**（决定 §六.9 只判"可证矛盾"） | 559 个可读 face（`C:\Windows\Fonts` 只读，`mstmc.ttf` 不可解析已排除）：`maxp != 独立量` **0**；`ulUnicodeRange` **过度**声明 21 个字体 / 87 个位（最多 `Charriot.ttf` 19 位、`HYZhongHeiTi-197.ttf` 31 位）；**欠**声明 91–254/559（`greek` 254、`vietnamese` 111、`latin1` 91）→ **欠声明不可判**；`ulUnicodeRange` 全零 118 个；码页 bit0 无 Latin-1 覆盖 **1** 个（`HYZhongHeiTi-197.ttf`，`cp1 = 0x4009F`、`C` 无任何 `≤ U+00FF`）；非 Latin-1 码页位"零覆盖" 1–43 个/位 → **逐位不可判**；`usFirstCharIndex` 未覆盖住 3 个（`Lfswm7` / `MingHei_R` / `streeeeetch`，`lo = U+0000` 而字段 `0x1`/`0xD`）、`usLastCharIndex` 未覆盖住 20 个（如 `comic.ttf` 声明 `0xFB02` 而 `C` 含 `U+FB13–FB17`）、反向留白 1 个；**bit57（`Non-Plane 0 *`）**：26 个字体置了该位且确有非 BMP 码位、**4 个置了却没有**（`ChekiangShuKeSung.otf/.ttf`、`汉仪游园体简/繁`）→ 该位按"是否有 `> U+FFFF` 码位"判；`OS2_UNICODE_RANGES` 两个通道均 **123** 块 | 只读脚本（`_scratch` 原型，不入仓）逐字体复算；结论落进 §六.9.2–§六.9.5 的"为什么只判这个方向" |
+| **16** | **F6 的同构 OFL 复现**（不依赖商用字体）：`NotoSansSC-Regular.otf` 只对 `汉字` 子集 | 产物 `OS/2`：`ulCodePageRange1 = 0x1`（Latin-1 回退）、`ulUnicodeRange = [0x0, 0x08000000, 0x0, 0x0]`（**bit59 置位 = 正确重算**）、`usFirstCharIndex/usLastCharIndex = 0x5B57/0x6C49`、`maxp.numGlyphs = 3` = 独立量 `len(loca) - 1`、cmap 仅 `{U+5B57, U+6C49}` 无 `≤ U+00FF` 码位；nameID 由原 `{0..14}` 降到 `{0..6}` | `TTFont(lazy=True)` 只读 + `fontTools.subset` 落 `_scratch`（产物不入仓）；与 §四 #7（msyh 原始观察）**逐项同构** |
 
 > **推论（写进 HANDOFF-M2）**：`expect.json` 的 `fonttools_version` 必须记录**铸造时的版本**（常量
 > `GOLDEN_FONTOOLS_VERSION`），不能写运行时版本 —— 否则 3.8（4.57.0）与 3.12（4.67.0）两条 CI 通道的
@@ -414,6 +416,127 @@
 6. **退出码**：`0` 通过；`1` 有发现（`error` 级 finding）；`2` 输入非法（文件不可读 / 非字体 / 缺必需参数 / JSON 反序列化失败）。`SKIPPED(reason=...)` 恒为**不影响退出码**的 `note`。
 7. **fixture 名表**：`F1 fstype-nosubset`（0x0108）、`F2 fstype-multibit-v0`（0x000E + v0，**反例守护**）、`F3 fstype-multibit-v3`（0x000E + v3）、`F4 silent-drop`、`F5 metadata-stripped`、`F6 codepage-mismatch`。**F7 不入仓**：布局对照用**测试内合成字体**（落 `tmp_path`），理由见 §四.1 #14。
 8. **确定性**：所有排序键固定（finding：`module, severity, 主键`；字符集：码位升序；布局三元组：`TableTag, ScriptTag, LangSysTag, FeatureTag`）；报告不含时间戳/绝对路径/主机名/用户名；同一输入两次运行逐字节一致。
+9. **元数据与位域一致性（`metadata`）** —— 本节是 `metadata` 的**唯一**判定来源；代码里
+   `SPEC_REF = "data/README §6.9"` 是逐字副本（有测试解析本节做对账）。
+   记号：`N` = name 表记录集；`C` = 该字体 Unicode cmap 覆盖**真实**码位集（按 §六.3 选表后按 §六.2 剔 glyph0）；
+   `os2` = `OS/2` 表；`src` = 可选原字体。
+
+   **9.1 name 存活（必查七个 ID；两类缺失不得混为一谈）**
+
+   | 项 | 口径 |
+   |---|---|
+   | 必查 `nameID` | **0 / 7 / 11 / 13 / 14 / 16 / 17**（§三.3；13/14 是许可元数据闸门） |
+   | 「存在」判定 | `N` 里**至少一条**该 `nameID` 的记录，且 `toUnicode()` 去空白后**非空**。只看 `nameID` 不看 `langID`（语言裁剪另按 9.1 末条**只进 summary**） |
+   | 分类（`--source` 给出时） | ① `default_stripped` = `src` 有该 ID（非空）而产物没有 → **产 finding**；② `author_absent` = `src` 也没有 → **不产 finding**（原作者就没写，不是子集工具的错） |
+   | 分类（**无** `--source`） | `unclassified` —— **只看得到"缺"，分不出是谁的责任 → 不产 finding**，只进 `summary.metadata.name.missing`。无源就下结论等于猜 |
+   | 级别 | 恒 `warn`（功能未失效，可追溯性下降；与 §六.5.4 改名同档） |
+
+   finding 码（**只此七条**，`primary_key` = `nameID<id>`，`spec_ref` 逐字使用）：
+
+   | `code` | 覆盖 | 级别 | `primary_key` | `spec_ref` |
+   |---|---|---|---|---|
+   | `NAME_COPYRIGHT_STRIPPED` | 0 | `warn` | `nameID0` | `MS-NAME nameID0` |
+   | `NAME_TRADEMARK_STRIPPED` | 7 | `warn` | `nameID7` | `MS-NAME nameID7` |
+   | `NAME_VENDOR_URL_STRIPPED` | 11 | `warn` | `nameID11` | `MS-NAME nameID11` |
+   | `NAME_LICENSE_DESCRIPTION_STRIPPED` | 13 | `warn` | `nameID13` | `MS-NAME nameID13` |
+   | `NAME_LICENSE_INFO_URL_STRIPPED` | 14 | `warn` | `nameID14` | `MS-NAME nameID14` |
+   | `NAME_TYPOGRAPHIC_FAMILY_STRIPPED` | 16 | `warn` | `nameID16` | `MS-NAME nameID16` |
+   | `NAME_TYPOGRAPHIC_SUBFAMILY_STRIPPED` | 17 | `warn` | `nameID17` | `MS-NAME nameID17` |
+
+   - **语言裁剪只计数、不产 finding**：`summary.metadata.name.languages` 记 `{source: [...], subset: [...]}`。
+     理由：`name_languages=[1033]` 默认裁掉本地化家族名，但规范并**不要求**一条字体必须带哪些语言 ——
+     判成 finding 会把"单语字体"判红（实测系统池里大量字体本来只有 1033）。这与 §六.5.3
+     "默认丢弃标签不是本工具的判定"同一纪律。
+   - `summary.metadata.name.classification` = `default_stripped` / `author_absent` / `unclassified`
+     （按"本次报告里有几个 ID 落在这类"给计数，不是单一枚举值）。
+
+   **9.2 `ulCodePageRange` ↔ `C`（只判 bit0，判定式按码位范围，不比"是否为 0"）**
+
+   | 项 | 口径 |
+   |---|---|
+   | 判定面 | **只判 bit0（Latin-1）**。判定式：`(ulCodePageRange1 & 0x1) != 0` **且** `C ∩ [U+0000, U+00FF] == ∅` → 矛盾 |
+   | 级别 / `primary_key` / `spec_ref` | 恒 `error` / `cp1:latin1` / `fontTools O_S_2f_2.recalcCodePageRanges` |
+   | `code` | `CODEPAGE_CLAIMS_LATIN1_WITHOUT_COVERAGE`（**只此一条**） |
+   | 为什么 bit0 可判 | Latin-1 的字符集**整个**落在 `U+0000–U+00FF` 内（ASCII 全在、重音字母全在）→「声称支持 Latin-1 却一个 `≤ U+00FF` 的码位都没有」是**可证矛盾**，不需要任何码页映射表 |
+   | 触发来源 | `pyftsubset` 的 `recalcCodePageRanges` 在"无码页可用"时**回退置 bit0**（源码注释 "so that the font works in MS Word"，§四 #7c）→ 只含 CJK 的产物必然踩中（§四.1 #16） |
+
+   - **为什么不逐位判 17–30**（必须写清，否则会被当成漏实现）：① 逐码页的字符集映射表不在本仓库，
+     硬编码 100+ 码页 = 第二套口径且无法离线核证；② 实测 559 个系统字体上，非 Latin-1 码页位的
+     "零覆盖"率高得不能当矛盾用（`cyrillic` 位 33/559、`vietnamese` 43/559、`hebrew` 41/559、
+     `arabic` 40/559、`turkish` 38/559 —— 见 §四.1 #15）。逐位判会把真实世界里常见的"宽声明"批量判红，
+     与"只报可证矛盾"的总纪律冲突。
+   - **未判定的位不隐藏**：`summary.metadata.codepage` 列出**全部置位**（`bits`）、每个位在 `C` 里的命中数
+     （`hits`）与是否被判定（`judged`）。用户能看到事实，只是工具不对它下结论。
+
+   **9.3 `ulUnicodeRange` 自洽（**不对称**判定 + 零值反例守护）**
+
+   | 方向 | 判不判 | 判定式 | 理由 |
+   |---|---|---|---|
+   | **过度声明**（位置了、`C` 没覆盖到该块） | **判** | 对每个置位的 bit `b`：`block_ranges(b) ∩ C == ∅` → 矛盾 | 位语义是"本字体支持该 Unicode 块"；声明了却一个字符都没有 = 可证矛盾 |
+   | **欠声明**（`C` 覆盖了、位没置） | **不判** | — | 位是**可选**的自我声明（不加也不违规）；实测欠声明率极高（`greek` 254/559、`vietnamese` 111/559、`latin1` 91/559）→ 判它就是把"没声明全"判红 |
+   | **全零**（`ulUnicodeRange1..4` 全 0） | **不判** | — | 实测 118/559 字体全零（多为老位图字体）→ 属欠声明；**且** `ulUnicodeRange1 = 0` 在 CJK 子集里是**正确重算**（bit59 在 `ulUnicodeRange2`，见 §七 #3）→ 照初稿实现会产**假阳性** |
+
+   - `code` = `UNICODE_RANGE_OVER_DECLARED`，级别 `warn`（不破坏渲染，是元数据不准确），
+     `primary_key` = `ur:bit<十进制位号>`，`spec_ref` = `MS-OS2 §ulUnicodeRange`。
+   - **块范围单点** = `fontTools.ttLib.tables.O_S_2f_2.OS2_UNICODE_RANGES`（123 个块，v1.7 数据；
+     两个解释器通道实测均为 123，见 §四.1 #15）。本仓库**不复制**这张表 —— 复制即第二套口径。
+   - **行为型位（`Non-Plane 0 *`，bit 57）的判定式与普通块不同**：该位的声明区间在表里写作
+     `U+D800–U+DFFF`（代理区，本身**不含任何可编码字符**），它的真实语义是"本字体含 BMP 之外的码位"。
+     故 bit57 的判定式 = **`C` 里存在任一 `> U+FFFF` 的码位**，而不是"代理区里有码位"
+     （后者恒为假 → 会把 26 个合法字体误判成过度声明，实测见 §四.1 #15）。
+     识别方式：该位在 `OS2_UNICODE_RANGES` 里的**全部**区间都落在 `U+D800–U+DFFF` 内。
+     其余位一律按区间比对。
+   - **被禁止的判定形态**：`UNICODE_RANGE_CONTRADICTION` / `primary_key = "ur1:zero"`。
+     它是"只看 `ulUnicodeRange1 == 0` 就报矛盾"的产物，已由 F6 的
+     `expected_absent_findings` 钉死（§六.7 / `data/fixtures/codepage-mismatch/expect.json`）。
+
+   **9.4 `maxp.numGlyphs` ↔ 实际字形数（独立复算，不自证）**
+
+   | 项 | 口径 |
+   |---|---|
+   | 实际字形数「独立量」 | 有 `glyf`+`loca` → `len(loca.locations) - 1`；有 `CFF ` → `len(CharStrings)`。**不用** `font.getGlyphOrder()`：它在 TTF 下本身就由 `loca` 长度推出，拿它比 `maxp` 等于让 fontTools 自证。但在 CFF 下 `getGlyphOrder()` 的命名表**短于** `maxp` 时会被补名，所以两者都报进 `summary`（`numGlyphs` / `measured` / `glyph_order`），判定只认 `measured` |
+   | 判定式 | `maxp.numGlyphs != measured` → 矛盾（`error`，`primary_key = maxp`，`code = MAXP_NUM_GLYPHS_MISMATCH`，`spec_ref = MS-maxp §numGlyphs`） |
+   | 相等 | **不产 finding**（DoD ④） |
+   | 取不到独立量（既无 `glyf`/`loca` 也无 `CFF `） | `SKIPPED(reason=no_outline_table)`，其余判定照常 |
+
+   **9.5 `usFirstCharIndex` / `usLastCharIndex` ↔ `C`**
+
+   | 项 | 口径 |
+   |---|---|
+   | 有效范围 | 两个字段都是 `uint16` → 只对 `C` 的 **BMP 子集**（`≤ U+FFFE`）判定。`lo = min(BMP)`、`hi = max(BMP)` |
+   | 哨兵 | `0xFFFF` = "该方向无约束"（规范用 `0xFFFF` 表示"超出 BMP / 空字体"）。字段为 `0xFFFF` 时**该方向不判** |
+   | 判定式（只判"**没覆盖住**"方向） | `usFirstCharIndex != 0xFFFF` 且 `lo < usFirstCharIndex` → 矛盾（`primary_key = usFirstCharIndex`）；`usLastCharIndex != 0xFFFF` 且 `hi > usLastCharIndex` → 矛盾（`primary_key = usLastCharIndex`）；两者均非哨兵且 `first > last` → 矛盾（`primary_key = usFirstCharIndex`） |
+   | **不判**的形态 | 字段**留白**（`first < lo`、`last > hi`）—— 实测只 1 例（`last_padded_up`），且"范围比实际宽"是更弱的声明，判它会引入噪声（§四.1 #15） |
+   | 级别 / `code` / `spec_ref` | `warn` / `CHAR_INDEX_MISMATCH` / `MS-OS2 §usFirstCharIndex` |
+   | `C` 无 BMP 码位 | 该判定整体跳过，`summary.metadata.char_index.judged = false`（不产 finding） |
+
+   **9.6 失败路径（四条理由不得合并；各自一条 `SKIPPED` + `summary` 为空 + 退出码 0）**
+
+   | 情形 | `reason` | `detail` 前缀 |
+   |---|---|---|
+   | 无 `OS/2` 表 | `no_os2_table` | `subset:` |
+   | 无 `name` 表 | `no_name_table` | `subset:` |
+   | 根本没有 `cmap` 表 | `no_cmap_table` | `subset:` |
+   | 有 `cmap` 表但无 Unicode 子表 | `no_unicode_cmap` | `subset:` |
+
+   - 后两条**复用** §六.3 的理由名（不另造），`detail` 以 `subset:` 开头并带 `metadata §6.9` 标记，
+     与 `coverage-diff` 的同类 SKIPPED 可区分（`module` 字段本就不同，`detail` 再标一次是给只读 detail 的读者）。
+   - **任一条成立 → 整份 `metadata` 结论作废**（`summary == {}`），**不猜、不给半份结论** ——
+     与 §六.3「任一输入取不到 Unicode cmap → `summary` 为空」同一条纪律。
+   - 无 `--source` **不是**失败路径：照 9.1 判为 `unclassified`，其余判定照常。
+   - `--source` 给出但**源**缺表：不因此作废（本模块审的是产物）；源侧缺 `name`/`OS/2` 时
+     9.1 的差分降级为 `unclassified`，并在 `summary.metadata.name.source_present` 记 `false`。
+
+   **9.7 `report` 聚合口径（**只有一条路径**）**
+
+   | 项 | 口径 |
+   |---|---|
+   | 唯一入口 | `report.evaluate(source=None, subset=None, required=None)` —— 聚合 + 组装都在它里面；`cli._run_report` 只做参数翻译。**不得**再出现第二处 `summary.update(...)` 的聚合代码 |
+   | 模块顺序（固定） | `license-gate`（有 `--source`）→ `metadata`（有 `--subset`）→ `layout-survival`（两侧都有）→ `coverage-diff`（有 `--source` 且给了 `--text`/`--corpus`） |
+   | 键冲突 | 顶级 `summary` 键**不得**跨模块重复（现状：`license-gate` 用 `fsType/os2_version/permission_*/conclusions/violations`；`coverage-diff` 用 `required/coverage/closure/fallback_hint/cmap/strict_source/subset_present`；`layout-survival` 用 `layout`；`metadata` 用 `metadata`）。冲突时**静默覆盖是缺陷** → 产 `code = SUMMARY_KEY_COLLISION`（`error`，`primary_key` = 冲突键名，`spec_ref = data/README §6.9`），并在 `summary.summary_key_collisions` 列出全部冲突键 |
+   | 模块清单 | `summary.modules` = 实际跑过的模块名列表（固定顺序），空跑也要写 `[]` —— 让"某个模块没跑"在报告里可见 |
+   | 退出码 | 仍只在 `cli.main` 收口（K2）；`report.evaluate` 只返回报告体 |
+   | 确定性 | 聚合后的 finding 仍由 `canonical.build_report` 统一排序；`summary` 的键序由构造处固定 |
 
 ## 七、更正记录（题面初稿 → 实测）
 

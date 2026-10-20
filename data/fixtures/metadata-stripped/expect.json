@@ -50,11 +50,30 @@
     "subset_name_languages": [
       1033
     ],
+    "required_name_ids": [
+      0,
+      7,
+      11,
+      13,
+      14,
+      16,
+      17
+    ],
     "missing_name_ids": [
       13,
       14
     ],
     "missing_classification": "default_stripped",
+    "default_stripped_name_ids": [
+      13,
+      14
+    ],
+    "author_absent_name_ids": [
+      7,
+      11,
+      16,
+      17
+    ],
     "name_language_count": 1,
     "expected_findings": [
       {
@@ -70,7 +89,25 @@
         "spec_ref": "MS-NAME nameID14"
       }
     ],
-    "counterexample_guard": "只有拿到 --source 且原文确有 13/14 时，才可判『默认剥离』；原文也没有则判『原作者没写』"
+    "expected_absent_findings": [
+      {
+        "code": "NAME_TRADEMARK_STRIPPED",
+        "primary_key": "nameID7"
+      },
+      {
+        "code": "NAME_VENDOR_URL_STRIPPED",
+        "primary_key": "nameID11"
+      },
+      {
+        "code": "NAME_TYPOGRAPHIC_FAMILY_STRIPPED",
+        "primary_key": "nameID16"
+      },
+      {
+        "code": "NAME_TYPOGRAPHIC_SUBFAMILY_STRIPPED",
+        "primary_key": "nameID17"
+      }
+    ],
+    "counterexample_guard": "只有拿到 --source 且原文确有 13/14 时，才可判『默认剥离』；原文也没有则判『原作者没写』（不产 finding）"
   },
   "fonttools_version": "4.57.0"
 }

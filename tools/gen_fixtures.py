@@ -479,8 +479,13 @@ def fixture_f5(out_dir):
         "expect": {
             "subset_name_ids": [0, 1, 2, 3, 4, 5, 6],
             "subset_name_languages": [1033],
+            "required_name_ids": [0, 7, 11, 13, 14, 16, 17],
             "missing_name_ids": [13, 14],
             "missing_classification": "default_stripped",
+            "default_stripped_name_ids": [13, 14],
+            # §六.9.1：源也没有的 ID 归「原作者没写」→ **不得**产 finding。
+            # 这四个 ID 是 F5 的"两类可分"证据（缺 13/14 与缺 7/11/16/17 是两件事）。
+            "author_absent_name_ids": [7, 11, 16, 17],
             "name_language_count": 1,
             "expected_findings": [
                 {"code": "NAME_LICENSE_DESCRIPTION_STRIPPED", "severity": "warn",
@@ -488,8 +493,14 @@ def fixture_f5(out_dir):
                 {"code": "NAME_LICENSE_INFO_URL_STRIPPED", "severity": "warn",
                  "primary_key": "nameID14", "spec_ref": "MS-NAME nameID14"},
             ],
+            "expected_absent_findings": [
+                {"code": "NAME_TRADEMARK_STRIPPED", "primary_key": "nameID7"},
+                {"code": "NAME_VENDOR_URL_STRIPPED", "primary_key": "nameID11"},
+                {"code": "NAME_TYPOGRAPHIC_FAMILY_STRIPPED", "primary_key": "nameID16"},
+                {"code": "NAME_TYPOGRAPHIC_SUBFAMILY_STRIPPED", "primary_key": "nameID17"},
+            ],
             "counterexample_guard": "只有拿到 --source 且原文确有 13/14 时，才可判『默认剥离』；"
-                                    "原文也没有则判『原作者没写』",
+                                    "原文也没有则判『原作者没写』（不产 finding）",
         },
     }
 
@@ -521,6 +532,7 @@ def fixture_f6(out_dir):
             "ulUnicodeRange2_bit59_set": True,
             "cmap_has_latin1": False,
             "codepage_claims_latin1": True,
+            "unicode_range_declared_bits": [59],
             "expected_findings": [
                 {"code": "CODEPAGE_CLAIMS_LATIN1_WITHOUT_COVERAGE", "severity": "error",
                  "primary_key": "cp1:latin1", "spec_ref": "fontTools O_S_2f_2.recalcCodePageRanges"}
@@ -528,7 +540,13 @@ def fixture_f6(out_dir):
             "counterexample_guard": "ulUnicodeRange1=0 是正确重算（bit59 在 ulUnicodeRange2），"
                                     "不得报矛盾；真实矛盾点只在 ulCodePageRange1 的 Latin-1 回退",
             "expected_absent_findings": [
-                {"code": "UNICODE_RANGE_CONTRADICTION", "primary_key": "ur1:zero"}
+                {"code": "UNICODE_RANGE_CONTRADICTION", "primary_key": "ur1:zero"},
+                # §六.9.3：bit59 声明了且 cmap 真有 CJK → **不得**报过度声明
+                {"code": "UNICODE_RANGE_OVER_DECLARED", "primary_key": "ur:bit59"},
+                # §六.9.4 / 9.5：相等与"恰好覆盖"都不产 finding
+                {"code": "MAXP_NUM_GLYPHS_MISMATCH", "primary_key": "maxp"},
+                {"code": "CHAR_INDEX_MISMATCH", "primary_key": "usFirstCharIndex"},
+                {"code": "CHAR_INDEX_MISMATCH", "primary_key": "usLastCharIndex"},
             ],
         },
     }
@@ -686,6 +704,18 @@ def self_check(fid, path, expect):
         missing = sorted(set(src_names) - set(names))
         if missing != sorted(exp["missing_name_ids"]):
             problems.append("缺失 nameID %s != 期望 %s" % (missing, exp["missing_name_ids"]))
+        # §六.9.1 的**两类缺失**必须由 oracle 自己复算：
+        #   default_stripped = 源有、产物没有；author_absent = 两侧都没有。
+        # 只查"缺失集合"不够 —— 分类错了 golden 仍然会过（M5 补的判据）。
+        produced = set(names)
+        class_default = sorted(set(src_names) - produced)
+        class_absent = sorted(set(exp["required_name_ids"]) - set(src_names) - produced)
+        if class_default != sorted(exp["default_stripped_name_ids"]):
+            problems.append("『默认剥离』分类 %s != 期望 %s"
+                            % (class_default, sorted(exp["default_stripped_name_ids"])))
+        if class_absent != sorted(exp["author_absent_name_ids"]):
+            problems.append("『原作者没写』分类 %s != 期望 %s"
+                            % (class_absent, sorted(exp["author_absent_name_ids"])))
         return problems
 
     if fid == "F6":
@@ -709,6 +739,25 @@ def self_check(fid, path, expect):
                             % (claims_latin1, exp["codepage_claims_latin1"]))
         if claims_latin1 == has_latin1:
             problems.append("F6 构造失效：码页声明与 cmap 未形成矛盾")
+        # §六.9.3 的反例守护：置位的**位号**要由 oracle 自己算出来，
+        # 而不是只信 "ulUnicodeRange1 == 0"（那是初稿的假阳性来源）。
+        declared = []
+        for index, word in enumerate(os2["ulUnicodeRange"]):
+            for i in range(32):
+                if word & (1 << i):
+                    declared.append(32 * index + i)
+        if declared != sorted(exp["unicode_range_declared_bits"]):
+            problems.append("ulUnicodeRange 置位位号 %s != 期望 %s"
+                            % (declared, sorted(exp["unicode_range_declared_bits"])))
+        if 59 not in declared:
+            problems.append("bit59（CJK Unified Ideographs）未置位 → 与 '正确重算' 的期望矛盾")
+        if declared and 59 in declared:
+            covered = oracle_sfnt_cmap_mask(path)
+            # 该位声明的 CJK 主区（U+4E00–U+9FFF）：产物必须真有码位落在这里，
+            # 否则"过度声明"就该报 —— 这里把反例守护的两侧都钉住。
+            in_cjk = any(0x4E00 <= cp <= 0x9FFF for cp in covered)
+            if not in_cjk:
+                problems.append("bit59 声明了 CJK 但 cmap 无该区码位 → 过度声明判据会正确开火")
         # 源侧独立复算：源必须真的声明了 CJK 之外的码页，否则"回退"这个说法无对照
         src_path = os.path.join(os.path.dirname(path), expect["input"]["source"])
         src_cp = oracle_os2(src_path)["ulCodePageRange"]

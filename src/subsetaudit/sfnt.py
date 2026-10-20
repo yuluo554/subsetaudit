@@ -144,6 +144,74 @@ def glyph_count(font):
     return len(order)
 
 
+def measured_glyph_count(font):
+    """**独立于 `maxp`** 的字形数量（§六.9.4）：`loca` 条目数 - 1，或 CFF 的 `CharStrings` 条数。
+
+    为什么不用 ``getGlyphOrder()``：TTF 下它的长度本身就是由 `loca` 推出来的，
+    拿它比 `maxp` 等于让 fontTools 自证（`maxp` 被改坏时 `loca` 没动，两者才会不等）；
+    CFF 下命名表短于 `maxp` 时 fontTools 会**补名**到 `maxp`，同样测不出矛盾。
+    取不到独立量（既无 `glyf`/`loca` 也无 `CFF `）→ ``None``。
+    """
+    try:
+        if "glyf" in font and "loca" in font:
+            return len(font["loca"].locations) - 1
+        if "CFF " in font:
+            cff = font["CFF "].cff
+            return len(cff[cff.fontNames[0]].CharStrings)
+    except (KeyError, AttributeError, IndexError):
+        return None
+    return None
+
+
+def name_ids(font):
+    """``{nameID: [非空值, ...]}``；缺表 → ``{}``（§六.9.1「存在」= 至少一条非空记录）。"""
+    grouped = {}
+    for (name_id, _lang), value in name_records(font).items():
+        text = (value or "").strip()
+        if text:
+            grouped.setdefault(name_id, []).append(text)
+    return grouped
+
+
+def name_language_ids(font):
+    """name 表里出现过的语言 ID（升序）—— 只进 summary，不产 finding（§六.9.1）。"""
+    return sorted(set(lang for (_nid, lang) in name_records(font)))
+
+
+def cmap_codepoints(font):
+    """该字体**全部 Unicode 子表**的并集，并按 §六.2 剔 glyph0。
+
+    与 ``select_unicode_cmap``（§六.3 优先级选表）语义不同：这里问的是"字体到底能画哪些码位"，
+    而 §六.3 问的是"用户敲这个字符时用哪张表"。§六.9 的 `C` 用本函数。
+    **只要 Unicode 子表**：`(1,0)`/format 0 这类 Mac Roman 子表不是 Unicode 映射，
+    把它并进来会让"没有 Unicode cmap"的字体看起来有覆盖（`no_unicode_cmap` 判不出来）。
+    """
+    from .cmapset import NOTDEF_NAMES
+
+    if "cmap" not in font:
+        return set()
+    covered = set()
+    for sub in font["cmap"].tables:
+        try:
+            if not sub.isUnicode():
+                continue
+        except AttributeError:  # pragma: no cover - 老版本/残缺子表
+            continue
+        for cp, glyph in sub.cmap.items():
+            if not isinstance(cp, int):
+                continue
+            if ((glyph or "").strip()) in NOTDEF_NAMES:
+                continue
+            covered.add(int(cp))
+    return covered
+
+
+def os2_version(font):
+    if "OS/2" not in font:
+        return None
+    return int(getattr(font["OS/2"], "version", 0))
+
+
 # ── 布局表（§六.5；只读，不构造写入对象） ──────────────────────────────────
 def layout_table_presence(font):
     """``{"GSUB": bool, "GPOS": bool}`` —— 缺表与空表是两件事（§六.5.5）。"""

@@ -16,11 +16,15 @@
 ## 期望（`expect.json` 摘要）
 
 ```
-counterexample_guard: "只有拿到 --source 且原文确有 13/14 时，才可判『默认剥离』；原文也没有则判『原作者没写』"
+author_absent_name_ids: [7, 11, 16, 17]
+counterexample_guard: "只有拿到 --source 且原文确有 13/14 时，才可判『默认剥离』；原文也没有则判『原作者没写』（不产 finding）"
+default_stripped_name_ids: [13, 14]
+expected_absent_findings: [{"code": "NAME_TRADEMARK_STRIPPED", "primary_key": "nameID7"}, {"code": "NAME_VENDOR_URL_STRIPPED", "primary_key": "nameID11"}, {"code": "NAME_TYPOGRAPHIC_FAMILY_STRIPPED", "primary_key": "nameID16"}, {"code": "NAME_TYPOGRAPHIC_SUBFAMILY_STRIPPED", "primary_key": "nameID17"}]
 expected_findings: [{"code": "NAME_LICENSE_DESCRIPTION_STRIPPED", "severity": "warn", "primary_key": "nameID13", "spec_ref": "MS-NAME nameID13"}, {"code": "NAME_LICENSE_INFO_URL_STRIPPED", "severity": "warn", "primary_key": "nameID14", "spec_ref": "MS-NAME nameID14"}]
 missing_classification: "default_stripped"
 missing_name_ids: [13, 14]
 name_language_count: 1
+required_name_ids: [0, 7, 11, 13, 14, 16, 17]
 subset_name_ids: [0, 1, 2, 3, 4, 5, 6]
 subset_name_languages: [1033]
 ```

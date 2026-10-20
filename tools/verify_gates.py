@@ -212,15 +212,15 @@ MUTATIONS = [
                            "| CI 实跑 | 无远端，未跑过 | 首次 push 后登记 run id |",
                            "| CI 实跑（M0） | 无远端，未跑过 | 首次 push 后登记 run id |")),
     # 靶子语义 = "**下一个还没完成的里程碑**翻 ✅ 但交接单缺节"。
-    # 2026-10-21 M1 收尾时把靶子从 M1 移到 M2；M2 收尾移到 M3；M3 收尾移到 M4；M4 收尾移到 M5
-    # （已 ✅ 的里程碑上 `_mark_done(k)` 会在 "M<k> 行本来就不是 ⬜" 处断言失败 → SKIP，不是 PASS）。
-    # 靶子必须打"当前是 ⬜ 的那个"。
-    ("L4", "M5 标 ✅ 但交接单缺节", LAYOUT, "LAYOUT.HANDOFFS",
+    # 2026-10-21 M1 收尾时把靶子从 M1 移到 M2；M2 收尾移到 M3；M3 收尾移到 M4；M4 收尾移到 M5；
+    # M5 收尾移到 M6（已 ✅ 的里程碑上 `_mark_done(k)` 会在 "M<k> 行本来就不是 ⬜" 处断言失败
+    # → SKIP，不是 PASS）。靶子必须打"当前是 ⬜ 的那个"。
+    ("L4", "M6 标 ✅ 但交接单缺节", LAYOUT, "LAYOUT.HANDOFFS",
      lambda: _chain(
-         lambda: _mark_done(5),
-         (lambda: _create("plan/HANDOFF-M5.md", HANDOFF_STUB_INCOMPLETE))
-         if not os.path.exists(path_of("plan/HANDOFF-M5.md"))
-         else (lambda: _replace_once("plan/HANDOFF-M5.md", "## 五、本机环境坑", "## 五、环境"))
+         lambda: _mark_done(6),
+         (lambda: _create("plan/HANDOFF-M6.md", HANDOFF_STUB_INCOMPLETE))
+         if not os.path.exists(path_of("plan/HANDOFF-M6.md"))
+         else (lambda: _replace_once("plan/HANDOFF-M6.md", "## 五、本机环境坑", "## 五、环境"))
      )),
     ("L5", "删 plan/00 顶部装订行", LAYOUT, "LAYOUT.BINDING_HEAD",
      lambda: _replace_once("plan/00-README总览.md",
@@ -241,13 +241,14 @@ MUTATIONS = [
     # L9 的语义是"**已 ✅ 的里程碑**在台账里仍挂未完成标记"，所以必须先让目标里程碑翻 ✅
     # 再往台账写 `⬜ 待 M<k>` —— 否则那一行是**正确状态**，不该红
     # （变异验证首版就瞄错了靶子：靶子挑错时"没红"不代表门假）。
-    ("L9", "M5 已 ✅ 但台账里仍写 ⬜ 待 M5", LAYOUT, "LAYOUT.LEDGER",
-     # 2026-10-21 M1 收尾：靶子从 M1 移到 M2；M2 收尾移到 M3；M3 收尾移到 M4；M4 收尾移到 M5
-     # （已 ✅ 的里程碑上 `_mark_done(k)` 会 SKIP）。
-     lambda: _chain(lambda: _mark_done(5),
+    ("L9", "M6 已 ✅ 但台账里仍写 ⬜ 待 M6", LAYOUT, "LAYOUT.LEDGER",
+     # 2026-10-21 M1 收尾：靶子从 M1 移到 M2；M2 收尾移到 M3；M3 收尾移到 M4；M4 收尾移到 M5；
+     # M5 收尾移到 M6（已 ✅ 的里程碑上 `_mark_done(k)` 会 SKIP）。
+     # ⚠️ M6 是**发布里程碑**：`_mark_done(6)` 还会让 LAYOUT.RELEASE 红，但本组只认 LEDGER 那一条。
+     lambda: _chain(lambda: _mark_done(6),
                     lambda: _replace_once("plan/00-README总览.md",
                                           "| 定位宣言含\"审产物不审项目\" | plan/01 §头部、README | ✅ 已写 |",
-                                          "| 定位宣言含\"审产物不审项目\" | plan/01 §头部、README | ⬜ 待 M5 验证 |"))),
+                                          "| 定位宣言含\"审产物不审项目\" | plan/01 §头部、README | ⬜ 待 M6 验证 |"))),
     ("L10", "发布里程碑 ✅ 但删掉 RELEASE 留档", LAYOUT, "LAYOUT.RELEASE",
      lambda: _mark_done(6)),
     ("L11", "文档点名一个不存在的 tools/*.py", LAYOUT, "LAYOUT.DOC_TOOLS",

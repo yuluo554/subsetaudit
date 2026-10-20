@@ -1,9 +1,14 @@
 # -*- coding: utf-8 -*-
-"""M0 骨架共用：**输入校验是真实现，判定是跳过**。
+"""输入校验共用层（M0 起；M5 起已无骨架模块在使用本文件的跳过出口）。
 
-纪律：M0 不许伪造判定（`SKIPPED(reason=module_not_implemented_in_m0)`），
-但**输入合法性必须当场校验** —— 不可读 / 非 sfnt 必须走退出码 2，
-否则"骨架阶段退出码正确"这句话就是假的（三档退出码是 M0 就承诺的可演示物）。
+历史：M0 的骨架模块用 ``skeleton_result`` 走 `SKIPPED(reason=module_not_implemented_in_m0)`，
+**不许伪造判定**。M2–M5 逐个里程碑把判定填实后，`skeleton_result` 已**无人调用**
+（`tests/test_cli.py` 反向扫描钉住），只剩 ``validate_inputs`` 在用 —— 那是**真实现**：
+不可读 / 非 sfnt 必须走退出码 2，否则"退出码正确"这句话就是假的。
+
+`NOT_IMPLEMENTED` / `skeleton_result` 保留为**历史符号**：将来若再加骨架模块，
+`tests/test_cli.py::test_skeleton_modules_do_not_fabricate_findings` 的 `SKELETON_MODULES`
+填上名字即可复用同一套纪律（断言它也走这个出口且不构造 finding）。
 """
 from __future__ import print_function
 

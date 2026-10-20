@@ -5,7 +5,7 @@
 **审的是产物，不是字体项目。** 输入 = 原字体 + 子集字体 + 必须支持的字符集；
 输出 = 子集是否真覆盖、GSUB/GPOS 是否被弄坏、许可是否允许子集、元数据是否被剥掉。
 
-- **版本**：v0.1.0.dev0（M4 布局保真完成；元数据/报告判定待 M5）
+- **版本**：v0.1.0.dev0（M5 元数据与报告完成；待 M6 发布）
 - **交付形态**：纯本地 **Python CLI**（零网络、零模型、零商用字体）
 - **运行期依赖**：`fonttools`（唯一）｜**Python** ≥ 3.8
 
@@ -35,7 +35,7 @@ py -m venv .venv
 > **前置条件**：`pip install -e .` 需要 pip ≥ 21.3（PEP 660）。Python 3.8 的 `venv` 自带
 > pip 20.2.3，**不先升级会报** `editable mode currently requires a setup.py based build`。
 
-## 现状（M4 布局保真完成）
+## 现状（M5 元数据与报告完成）
 
 | 里程碑 | 内容 | 状态 |
 |---|---|---|
@@ -44,12 +44,12 @@ py -m venv .venv
 | M2 | `license-gate` 许可闸门（`OS/2.version` 分流） | ✅ |
 | M3 | `coverage-diff` 覆盖差集（三分类 + 回退链） | ✅ |
 | M4 | `layout-survival` 布局保真（Type 7/9 解包） | ✅ |
-| M5 | `metadata` + `report`（cmap↔OS/2 交叉一致性） | ⬜ |
+| M5 | `metadata` + `report`（cmap↔OS/2 交叉一致性） | ✅ |
 | M6 | 发布：GitHub 公开仓库 v0.1.0 | ⬜ |
 
-> 状态语义：`✅` 已完成、`⬜` 未开始。**`license-gate`、`coverage-diff` 与 `layout-survival`
-> 已产出真实判定**；`metadata` / `report` 的判定部分仍输出
-> `SKIPPED(reason=module_not_implemented_in_m0)` —— 这是**显式跳过**，不是静默通过。
+> 状态语义：`✅` 已完成、`⬜` 未开始。**五个子命令全部产出真实判定**（M5 起 `metadata`
+> 与 `report` 不再走骨架出口）。`SKIPPED(reason=...)` 只在**输入真的缺表**时出现
+> （无 `OS/2` / 无 `name` / 无 cmap / 无 Unicode cmap / 无布局表），恒显式、恒不影响退出码。
 
 ### `license-gate` 输出形状
 
@@ -131,10 +131,63 @@ py -m venv .venv
 - 两侧都没有 `GSUB`/`GPOS` → `SKIPPED(reason=no_layout_tables)`、`summary` 为空、退出码 0；
   只有一侧有 → 照常判定 + `SKIPPED(reason=layout_tables_missing_on_one_side)`（**不整份放弃**）。
 
+### `metadata` 输出形状
+
+```json
+"summary": {
+  "metadata": {
+    "spec_ref": "data/README §6.9",
+    "name": {
+      "present": [0], "missing": [7, 11, 13, 14, 16, 17],
+      "required_ids": [0, 7, 11, 13, 14, 16, 17],
+      "classification": { "default_stripped": [13, 14],
+                          "author_absent": [7, 11, 16, 17], "unclassified": [] },
+      "classification_source": "source",
+      "languages": { "subset": [1033], "source": [0, 1033] }
+    },
+    "codepage": { "ulCodePageRange1": "0x00000001", "bits": [0], "judged_bits": [0],
+                  "detail": [{ "bit": 0, "judged": true, "hits": 0, "ranges_known": true }] },
+    "unicode_range": { "declared": [59], "over_declared": [], "under_declared": [],
+                       "declared_empty": false },
+    "maxp": { "numGlyphs": 3, "measured": 3, "match": true },
+    "char_index": { "usFirstCharIndex": "0x5B57", "usLastCharIndex": "0x6C49",
+                    "measured_min": "U+5B57", "measured_max": "U+6C49", "judged": true }
+  }
+}
+```
+
+- 判定式与 `spec_ref` 的唯一来源是 `data/README.md` §六.9（name 存活 9.1 / 码页 9.2 /
+  `ulUnicodeRange` 9.3 / `maxp` 9.4 / 首末码位 9.5 / 失败路径 9.6 / report 聚合 9.7）。
+- **判定是"不对称"的，只报可证矛盾**：`ulUnicodeRange` 只判**过度声明**（欠声明与全零都不判 ——
+  `ulUnicodeRange1 = 0` 在 CJK 子集里是**正确重算**，bit59 在 `ulUnicodeRange2`）；
+  码页**只判 bit0（Latin-1）**；首末码位只判"没覆盖住"方向；`maxp` 与独立量相等即不报。
+- **name 缺失分两类，只有一类产 finding**：`default_stripped`（原字体有、产物没有，`warn`）与
+  `author_absent`（原作者也没写，**不产 finding**）。**没有 `--source` 时一律 `unclassified` 且不产 finding**
+  —— 只看得到"缺"，分不出是谁的责任，不猜。
+- 失败路径四条互不合并：无 `OS/2` → `no_os2_table`；无 `name` → `no_name_table`；
+  无 cmap 表 → `no_cmap_table`；无 Unicode cmap → `no_unicode_cmap`。任一成立 → `summary` 为空、退出码 0。
+
+### `report` 输出形状（聚合）
+
+```json
+"summary": {
+  "modules": ["license-gate", "metadata", "layout-survival", "coverage-diff"],
+  "conclusions": { "...": "..." }, "metadata": { "...": "..." },
+  "layout": { "...": "..." }, "coverage": { "...": "..." }
+}
+```
+
+- **只有一条聚合路径**：`report.evaluate(source, subset, required)`；`report` 子命令只做参数翻译
+  （有测试断言两条路径逐字节一致）。
+- 模块顺序固定 `license-gate → metadata → layout-survival → coverage-diff`；跑不跑由参数决定
+  （`--source` / `--subset` / 两侧都有 / 有需求集），`summary.modules` 照实列出。
+- **键冲突不静默覆盖**：两个模块用同一个顶级键 → `SUMMARY_KEY_COLLISION`（`error`）+
+  `summary.summary_key_collisions` 列出冲突键。
+
 ## 三个场景（最小复现命令）
 
-> 以下命令中，`license-gate`（M2）、`coverage-diff`（M3）与 `layout-survival`（M4）已产出真实判定；
-> `metadata` 在 M5 落地前退出码已正确、输出里带 `SKIPPED`。
+> 以下命令中五个子命令（`license-gate` / `coverage-diff` / `layout-survival` / `metadata` / `report`）
+> 都已产出真实判定。
 > 未标注 `<...>` 的参数都是真实路径；尖括号是占位符，请替换。
 
 ### 场景一：许可闸门（能不能嵌、能不能子集）

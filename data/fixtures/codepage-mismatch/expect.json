@@ -28,6 +28,9 @@
     "ulUnicodeRange2_bit59_set": true,
     "cmap_has_latin1": false,
     "codepage_claims_latin1": true,
+    "unicode_range_declared_bits": [
+      59
+    ],
     "expected_findings": [
       {
         "code": "CODEPAGE_CLAIMS_LATIN1_WITHOUT_COVERAGE",
@@ -41,6 +44,22 @@
       {
         "code": "UNICODE_RANGE_CONTRADICTION",
         "primary_key": "ur1:zero"
+      },
+      {
+        "code": "UNICODE_RANGE_OVER_DECLARED",
+        "primary_key": "ur:bit59"
+      },
+      {
+        "code": "MAXP_NUM_GLYPHS_MISMATCH",
+        "primary_key": "maxp"
+      },
+      {
+        "code": "CHAR_INDEX_MISMATCH",
+        "primary_key": "usFirstCharIndex"
+      },
+      {
+        "code": "CHAR_INDEX_MISMATCH",
+        "primary_key": "usLastCharIndex"
       }
     ]
   },

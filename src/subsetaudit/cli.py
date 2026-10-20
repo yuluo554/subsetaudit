@@ -157,36 +157,18 @@ def _run_metadata(args):
 
 
 def _run_report(args):
-    from ._skeleton import validate_inputs
+    """报告聚合：**唯一路径**是 `report.evaluate`（§六.9.7）——本函数只做参数翻译。"""
+    if args.corpus:
+        try:
+            required = _read_corpus(args.corpus)
+        except (OSError, UnicodeDecodeError) as exc:
+            raise canonical.InputError(args.corpus, "corpus_unreadable (%s)" % exc.__class__.__name__)
+    elif args.text:
+        required = _from_text(args.text)
+    else:
+        required = None
 
-    # 任一路径不可读/非字体 → 退出码 2（与其它子命令同一语义）
-    validate_inputs([args.source, args.subset])
-    findings, skips, summary = [], [], {}
-    inputs = {}
-    if args.source:
-        inputs["source"] = canonical.input_ref(args.source)
-        f1, s1, sum1 = license_gate.evaluate(args.source)
-        findings += f1
-        skips += s1
-        summary.update(sum1)
-    if args.subset:
-        inputs["subset"] = canonical.input_ref(args.subset)
-        f2, s2, sum2 = metadata.evaluate(args.subset, source_path=args.source)
-        findings += f2
-        skips += s2
-        summary.update(sum2)
-    if args.source and args.subset:
-        f3, s3, sum3 = layout_survival.evaluate(args.source, args.subset)
-        findings += f3
-        skips += s3
-        summary.update(sum3)
-    if args.source and (args.text or args.corpus):
-        required = _read_corpus(args.corpus) if args.corpus else _from_text(args.text)
-        f4, s4, sum4 = coverage_diff.evaluate(args.source, required, subset_path=args.subset)
-        findings += f4
-        skips += s4
-        summary.update(sum4)
-    body = report.build(findings, skips, inputs, summary)
+    body = report.evaluate(source=args.source, subset=args.subset, required=required)
     return _emit(body, args)
 
 

@@ -19,12 +19,13 @@ fontTools 的 `recalcCodePageRanges` 在无可用码页时**回退置 bit0 (Lati
 cmap_has_latin1: false
 codepage_claims_latin1: true
 counterexample_guard: "ulUnicodeRange1=0 是正确重算（bit59 在 ulUnicodeRange2），不得报矛盾；真实矛盾点只在 ulCodePageRange1 的 Latin-1 回退"
-expected_absent_findings: [{"code": "UNICODE_RANGE_CONTRADICTION", "primary_key": "ur1:zero"}]
+expected_absent_findings: [{"code": "UNICODE_RANGE_CONTRADICTION", "primary_key": "ur1:zero"}, {"code": "UNICODE_RANGE_OVER_DECLARED", "primary_key": "ur:bit59"}, {"code": "MAXP_NUM_GLYPHS_MISMATCH", "primary_key": "maxp"}, {"code": "CHAR_INDEX_MISMATCH", "primary_key": "usFirstCharIndex"}, {"code": "CHAR_INDEX_MISMATCH", "primary_key": "usLastCharIndex"}]
 expected_findings: [{"code": "CODEPAGE_CLAIMS_LATIN1_WITHOUT_COVERAGE", "severity": "error", "primary_key": "cp1:latin1", "spec_ref": "fontTools O_S_2f_2.recalcCodePageRanges"}]
 ulCodePageRange1: "0x00000001"
 ulCodePageRange2: "0x00000000"
 ulUnicodeRange1: "0x00000000"
 ulUnicodeRange2_bit59_set: true
+unicode_range_declared_bits: [59]
 ```
 
 ## 重生成

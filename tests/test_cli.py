@@ -140,16 +140,9 @@ def test_all_five_subcommands_exit_zero(simple_font, corpus_file, capsys):
         assert r.code == cli.EXIT_OK, "%r -> %s %s" % (argv, r.code, r.out)
         body = r.json()
         assert body["inputs"].get("source") is None or not os.path.isabs(body["inputs"]["source"])
-    # 仍是骨架的模块必须把 SKIPPED 显式写进输出。`license-gate`（M2）、`coverage-diff`（M3）
-    # 与 `layout-survival`（M4）已出真实结论，它们的"不再跳过"另由反向断言判
-    # （见下方 `*_is_no_longer_a_skeleton`）。
-    still_skeleton = [
-        ["metadata", simple_font],
-        ["metadata", simple_font, "--source", simple_font],
-    ]
-    for argv in still_skeleton:
-        r = run(argv, capsys)
-        assert r.json()["skipped"], "未实现的模块必须把 SKIPPED 显式写进输出: %r" % (argv,)
+    # M5 起**五个子命令全部出真实结论**（`metadata` 与 `report` 不再是骨架）→
+    # 这里不再要求"必须输出 SKIPPED"。"不再跳过"由下方 `*_is_no_longer_a_skeleton` 反向断言钉住。
+    assert True
 
 
 def test_report_markdown_format(simple_font, capsys):
@@ -276,15 +269,43 @@ def test_console_script_entry_point_matches_cli_main():
 def test_skeleton_modules_do_not_fabricate_findings():
     """未实现的模块只准返回 SKIPPED，不得返回任何 finding。
 
-    **M2 起 `license_gate`、M3 起 `coverage_diff`、M4 起 `layout_survival` 已实现判定**，
-    从本判据的断言面里移除（它们的"不伪造"由各自测试文件的 golden 逐项承担）；
-    `metadata`（M5）仍是骨架。
+    **M2 起 `license_gate`、M3 起 `coverage_diff`、M4 起 `layout_survival`、M5 起 `metadata`
+    都已实现判定** → 断言面已清空。这条判据保留为**空表形态**：将来若再加骨架模块，
+    把名字填进 `SKELETON_MODULES` 即可（空表本身也断言"包内确实没有残留骨架出口"）。
     """
-    for name in ("metadata",):
+    SKELETON_MODULES = ()
+    for name in SKELETON_MODULES:
         mod = __import__("subsetaudit.%s" % name, fromlist=[name])
         text = io.open(mod.__file__, "r", encoding="utf-8").read() if hasattr(mod, "__file__") else ""
         assert "skeleton_result(" in text, "%s 未走骨架出口" % name
-        assert "finding(" not in text, "%s 在 M0 里不得构造 finding" % name
+        assert "finding(" not in text, "%s 在骨架阶段不得构造 finding" % name
+    # 反向：包内不得再有任何模块调用骨架出口（否则说明"实现完了却还在跳过"）
+    pkg = os.path.join(REPO_ROOT, "src", "subsetaudit")
+    callers = []
+    for fname in sorted(os.listdir(pkg)):
+        if not fname.endswith(".py") or fname == "_skeleton.py":
+            continue
+        text = io.open(os.path.join(pkg, fname), "r", encoding="utf-8").read()
+        if "skeleton_result(" in text:
+            callers.append(fname)
+    assert callers == [], "这些模块仍在走骨架出口: %s" % callers
+
+
+def test_metadata_is_no_longer_a_skeleton():
+    """M5 已实现：`metadata` 不再走骨架出口（反向判据，防"翻完 ✅ 又退回骨架"）。"""
+    from subsetaudit import metadata
+    text = io.open(metadata.__file__, "r", encoding="utf-8").read()
+    assert "skeleton_result(" not in text
+    assert "module_not_implemented_in_m0" not in text
+
+
+def test_report_is_no_longer_a_skeleton():
+    """M5 已实现：`report.evaluate` 不再返回"未实现"的 SKIPPED（它现在是聚合的唯一路径）。"""
+    from subsetaudit import report
+    text = io.open(report.__file__, "r", encoding="utf-8").read()
+    assert "NOT_IMPLEMENTED" not in text
+    assert "module_not_implemented_in_m0" not in text
+    assert report.evaluate()["summary"]["modules"] == []
 
 
 def test_license_gate_is_no_longer_a_skeleton():
