@@ -10,22 +10,28 @@ bit3（Editable）+ bit8（No subsetting）。`OS/2.version = 4`。
 
 ## 真值来源
 
-直接由 `fsType` 位运算得到：`may_subset = (fsType & 0x0100) == 0` → `false`。
-不是「跑一遍工具再看输出」，而是对**输入位值**的独立复算（`data/README.md` §六.1）。
+直接由 `fsType` 位运算得到（`data/README.md` §六.1.2 / §六.1.3）：
+`perm = 8`（bits1–3 恰一位 → `direct`）；`may_subset = (fsType & 0x0100) == 0` → `false`。
+其余四条：`embed_pdf = perm!=2 and !bit9` → `true`（bit8 只禁子集，不禁嵌入）；`embed_app = perm==0` → `false`；`embed_web = perm!=2 and !bit8 and !bit9` → `false`；`may_modify = perm in (0,8)` → `true`。
+不是「跑一遍工具再看输出」，而是对**输入位值**的独立复算。
 
 ## 期望（`expect.json` 摘要）
 
 ```
 bit8_no_subsetting: true
 bit9_bitmap_only: false
+embed_app: false
+embed_pdf: true
+embed_web: false
 expected_findings: [{"code": "FSTYPE_NO_SUBSET", "severity": "error", "spec_ref": "MS-OS2 §fsType bit8"}]
 fsType: "0x0108"
+may_modify: true
 may_subset: false
 mutual_exclusion_violation: false
 os2_version: 4
-pending_conclusions: {"keys": ["embed_pdf", "embed_app", "embed_web", "may_modify"], "reason": "data/README.md §六.1 目前只定义了 may_subset 与保留位掩码；其余四条由 M2 先写入口径表再实现（plan/01 §三 禁第二套口径）"}
 permission_bits: "0x0008"
 permission_name: "Editable"
+permission_resolution: "direct"
 reserved_bits_set: false
 ```
 

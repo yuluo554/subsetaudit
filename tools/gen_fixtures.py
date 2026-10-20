@@ -270,16 +270,16 @@ def fixture_f1(out_dir):
             "fsType": "0x0108",
             "permission_bits": "0x0008",
             "permission_name": "Editable",
+            "permission_resolution": "direct",
             "may_subset": False,
+            "embed_pdf": True,
+            "embed_app": False,
+            "embed_web": False,
+            "may_modify": True,
             "bit8_no_subsetting": True,
             "bit9_bitmap_only": False,
             "reserved_bits_set": False,
             "mutual_exclusion_violation": False,
-            "pending_conclusions": {
-                "keys": ["embed_pdf", "embed_app", "embed_web", "may_modify"],
-                "reason": "data/README.md §六.1 目前只定义了 may_subset 与保留位掩码；"
-                          "其余四条由 M2 先写入口径表再实现（plan/01 §三 禁第二套口径）"
-            },
             "expected_findings": [
                 {"code": "FSTYPE_NO_SUBSET", "severity": "error", "spec_ref": "MS-OS2 §fsType bit8"}
             ],
@@ -310,15 +310,14 @@ def fixture_f2(out_dir):
             "permission_name": "Editable",
             "permission_resolution": "least_restrictive",
             "may_subset": True,
+            "embed_pdf": True,
+            "embed_app": False,
+            "embed_web": True,
+            "may_modify": True,
             "bit8_no_subsetting": False,
             "bit9_bitmap_only": False,
             "reserved_bits_set": False,
             "mutual_exclusion_violation": False,
-            "pending_conclusions": {
-                "keys": ["embed_pdf", "embed_app", "embed_web", "may_modify"],
-                "reason": "data/README.md §六.1 目前只定义了 may_subset 与保留位掩码；"
-                          "其余四条由 M2 先写入口径表再实现（plan/01 §三 禁第二套口径）"
-            },
             "expected_findings": [],
             "counterexample_guard": "v0 的 bits0–3 多位并存必须解析为最宽松权限，不得误报互斥",
         },
@@ -348,15 +347,14 @@ def fixture_f3(out_dir):
             "permission_name": "Editable",
             "permission_resolution": "least_restrictive",
             "may_subset": True,
+            "embed_pdf": True,
+            "embed_app": False,
+            "embed_web": True,
+            "may_modify": True,
             "bit8_no_subsetting": False,
             "bit9_bitmap_only": False,
             "reserved_bits_set": False,
             "mutual_exclusion_violation": True,
-            "pending_conclusions": {
-                "keys": ["embed_pdf", "embed_app", "embed_web", "may_modify"],
-                "reason": "data/README.md §六.1 目前只定义了 may_subset 与保留位掩码；"
-                          "其余四条由 M2 先写入口径表再实现（plan/01 §三 禁第二套口径）"
-            },
             "expected_findings": [
                 {"code": "FSTYPE_MUTUAL_EXCLUSION", "severity": "error",
                  "spec_ref": "MS-OS2 §fsType (v3+ mutually exclusive)"}
@@ -563,6 +561,23 @@ def most_permissive(bits):
     return 0
 
 
+def _oracle_conclusions(fs_type, perm):
+    """五元结论的**独立复算**（口径 = ``data/README.md`` §六.1.3）。
+
+    刻意不复用 ``subsetaudit.license_gate.conclusions_for`` —— 生成期自证的价值就在于
+    "用另一条代码路径把同一件事再算一遍"，复用被测实现等于没证。
+    """
+    bit8 = (fs_type & 0x0100) != 0
+    bit9 = (fs_type & 0x0200) != 0
+    return {
+        "embed_pdf": (perm != 2) and not bit9,
+        "embed_app": (perm == 0) and not bit9,
+        "embed_web": (perm != 2) and not bit8 and not bit9,
+        "may_subset": not bit8,
+        "may_modify": perm in (0, 8),
+    }
+
+
 def self_check(fid, path, expect):
     """用独立 oracle 复算，任何不符 → AssertionError（携带 fixture 名）。
 
@@ -598,9 +613,12 @@ def self_check(fid, path, expect):
             if reserved != exp["reserved_bits_set"]:
                 problems.append("reserved_bits %s != %s" % (reserved, exp["reserved_bits_set"]))
         if "permission_resolution" in exp:
-            if exp["permission_resolution"] != "least_restrictive":
-                problems.append("permission_resolution 口径未知")
-            # 取最宽松后的**权限名**必须与期望一致；单权限位时解析值 = 原位值
+            # §六.1.2：bits1–3 单位置位或全 0 → `direct`；≥2 位并存 → `least_restrictive`
+            expected_resolution = "least_restrictive" if bit_count >= 2 else "direct"
+            if exp["permission_resolution"] != expected_resolution:
+                problems.append("permission_resolution %s != 期望 %s"
+                                % (exp["permission_resolution"], expected_resolution))
+            # 解析出的**权限名**必须与期望一致；单权限位时解析值 = 原位值
             got_name = PERMISSION_NAMES.get(resolution, "unknown")
             if got_name != exp.get("permission_name"):
                 problems.append("最宽松解析 %s(%s) != 期望 %s"
@@ -613,6 +631,10 @@ def self_check(fid, path, expect):
         if "bit9_bitmap_only" in exp:
             if ((fs_type & 0x0200) != 0) != exp["bit9_bitmap_only"]:
                 problems.append("bit9 位与期望不符")
+        # 五元结论的**独立复算**（口径 = data/README.md §六.1.3，与实现分开写一遍）
+        for key, got in _oracle_conclusions(fs_type, resolution).items():
+            if key in exp and got != exp[key]:
+                problems.append("%s 复算 %s != 期望 %s" % (key, got, exp[key]))
         return problems
 
     if fid == "F4":
@@ -770,13 +792,20 @@ CONSTRUCTION = {
 }
 
 TRUTH = {
-    "F1": u"直接由 `fsType` 位运算得到：`may_subset = (fsType & 0x0100) == 0` → `false`。\n"
-          u"不是「跑一遍工具再看输出」，而是对**输入位值**的独立复算（`data/README.md` §六.1）。",
-    "F2": u"`bits = 0x000E`，`version = 0 <= 2` → 取最宽松 = bit3 Editable；"
+    "F1": u"直接由 `fsType` 位运算得到（`data/README.md` §六.1.2 / §六.1.3）：\n"
+          u"`perm = 8`（bits1–3 恰一位 → `direct`）；`may_subset = (fsType & 0x0100) == 0` → `false`。\n"
+          u"其余四条：`embed_pdf = perm!=2 and !bit9` → `true`（bit8 只禁子集，不禁嵌入）；"
+          u"`embed_app = perm==0` → `false`；`embed_web = perm!=2 and !bit8 and !bit9` → `false`；"
+          u"`may_modify = perm in (0,8)` → `true`。\n"
+          u"不是「跑一遍工具再看输出」，而是对**输入位值**的独立复算。",
+    "F2": u"`bits = 0x000E`，`version = 0 <= 2` → 取最宽松 = bit3 Editable（`least_restrictive`）；"
           u"`may_subset = (0x000E & 0x0100) == 0` → `true`。\n"
+          u"其余四条：`embed_pdf = true`、`embed_app = false`（perm≠0）、`embed_web = true`"
+          u"（perm≠2 且 bit8/bit9 均未置位）、`may_modify = true`。\n"
           u"规范原文：「the least-restrictive permission indicated take precedence」（`data/README.md` §3.2）。",
     "F3": u"`bits = 0x000E`，`version = 3 ≥ 3` → **互斥违规**（`error`）。\n"
-          u"最宽松权限仍是 Editable，但违规本身独立成条 —— 两者不互相抵消。",
+          u"最宽松权限仍是 Editable（`least_restrictive`），五元结论与 F2 **完全相同** —— "
+          u"违规本身独立成条，两者不互相抵消（这是 F2/F3 对照的判别点）。",
     "F4": u"需求集 `R = {{a,b,c,汉,字}}`，产物覆盖 `T = {{a,b,c}}`，源覆盖 `S ⊇ R`：\n"
           u"`LOST_IN_SUBSET = (R ∩ S) \\ T = {{汉, 字}}`；`MISSING_IN_SOURCE = R \\ S = ∅`。\n"
           u"由「合成本身」决定，不依赖被测实现（`data/README.md` §六.2）。",

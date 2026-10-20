@@ -117,6 +117,8 @@
 | 7 | F6 码页矛盾 | 源 `ulCodePageRange1 = 0x4001F` → 仅 CJK 子集后产物 = **`0x1`**（Latin-1 回退）；产物 `ulUnicodeRange1 = 0x0` 而 `ulUnicodeRange2` bit59 置位（**正确重算，不构成矛盾**）；产物 cmap 无任何 `≤ U+00FF` 码位 | 独立 OS/2 + cmap 解析 |
 | 8 | 跨 fontTools 版本产物一致性 | **4.57.0 与 4.67.0 生成的 6 组 fixture 二进制逐字节相同**（唯一差异是 `expect.json` 里记录的版本串） | `py tools/gen_fixtures.py --check` 在两条通道各跑一次 |
 | 9 | 确定性（禁时钟） | `FontBuilder` 默认把 `head.created/modified` 设为**当前时钟**（实测：间隔 1.2 s 两次生成 → 字节不同）；`subset` 的 `TTFont.save` 默认 `recalcTimestamp=True` 会再改一次 | 实测对照：钉死 `FIXED_EPOCH = 3155673600` 后两次生成逐字节一致 |
+| 10 | 五元结论（M2） | F1/F2/F3 各五条结论与 §六.1.3 的判定式逐项一致：F1 `{pdf:T, app:F, web:F, subset:F, modify:T}`；F2/F3 均为 `{T, F, T, T, T}`（**F2 与 F3 的五元结论完全相同**，差别只在违规条） | `tools/gen_fixtures.py::_oracle_conclusions` 独立复算（不复用被测实现）+ `tests/test_license_gate.py` 逐项 |
+| 11 | 违规码覆盖完备性 | `bits ∉ {0,2,4,8}` 的**全部**取值都被现有两条码覆盖：含 bit0 的由 `FSTYPE_BIT0_RESERVED` 抓；不含 bit0 的其 bits1–3 必 ≥2 位（`0x0006/0x000A/0x000C/0x000E`）→ v3+ 由互斥码抓、v0–v2 由"取最宽松"吸收 | §六.1.5 的可证推导；`tests/test_license_gate.py::test_permission_names_cover_exactly_the_four_legal_values` |
 
 > **推论（写进 HANDOFF-M2）**：`expect.json` 的 `fonttools_version` 必须记录**铸造时的版本**（常量
 > `GOLDEN_FONTOOLS_VERSION`），不能写运行时版本 —— 否则 3.8（4.57.0）与 3.12（4.67.0）两条 CI 通道的
@@ -154,9 +156,77 @@
 
 > **不可外推声明**：以上是**本机 Windows 系统字体池**的只读统计，**不是随机样本**，也不代表任何发行版、任何用户群或任何商业字体库的分布。**不得**把"bit8 在本池中为 0"读作"下游不需要 No-subsetting 闸门"——本池恰恰说明：**真实闸门是受限/保留位/元数据缺失（约 60% 字体缺 nameID 13），而 No-subsetting 在系统字体里几乎不出现**；把重心全押在"拒绝 No-subsetting"上会打空，因此 M1 必须同时覆盖 Restricted、保留位与元数据三类。
 
+### 5.1 M2 实现回填：真实字体池复跑（✅ 2026-10-21，只读）
+
+用交付实现 `license_gate.evaluate()` 对 `C:\Windows\Fonts` 的 `*.ttf` + `*.otf` 逐个 open/close 复跑
+（**不写任何文件**）：**560 个 face 成功判定，1 个 `mstmc.ttf` 报 `not_an_sfnt_font`**
+（`canonical.InputError` → 退出码 2，**不猜**）—— 与 §五 的"560 face，`mstmc.ttf` 已排除"同一口径。
+
+| 检查项 | 实测 | 与 §五 预测的一致性 |
+|---|---|---|
+| 权限位含 `0x000E` / `0x0003` / `0x0002` 的 face | **44** | ✅ = 0x000E 40 + 0x0003 1 + 0x0002 3 |
+| 报 `FSTYPE_MUTUAL_EXCLUSION` 的 | **0** | ✅ 44 个多位并存**全部**落在 v0/v1 → **零误报**；F2 的反例守护在真实池上成立 |
+| 解析为 Editable 且 `least_restrictive` 的 | **40** | ✅ 与派生行"40 个 0x000E 在 v0/v1 下应解析为 Editable"一致 |
+| 报 `FSTYPE_RESTRICTED_LICENSE` 的 | **4** | ✅ 与"按版本分流后受限 4/560（0.71%）"一致 |
+| 报 `FSTYPE_BIT0_RESERVED` 的 | **103** | ✅ 与"保留位 bit0 置位 103/560"一致 |
+| 报 `FSTYPE_NO_SUBSET` / `FSTYPE_BITMAP_ONLY` / `FSTYPE_RESERVED_BITS` 的 | **0 / 0 / 0** | ✅ 与 §五 bit8=0、bit9=0 一致；bits4–15 在本池确实无人置位 |
+
+> 意义：**§五 数的是"位模式"，§5.1 跑的是"交付实现的输出"** —— 两条独立路径得出同一组数字，
+> 说明实现与台账口径没有分叉。**仍未验证**：`.ttc` 集合字体（§五 未计入，本表也未计入）、
+> 以及非 Windows 字体池的分布（本表**不可外推**，理由同 §五 的不可外推声明）。
+
 ## 六、数值口径（**一处定义**）
 
-1. **`fsType` 判定**：先读 `OS/2.version`；`bits = fsType & 0x000F`。若 `version ≤ 2` 且 `bits` 有 ≥2 位 → 取**最宽松**权限（8 > 4 > 2 > 0 的宽松序：8 最宽松，2 最严）；若 `version ≥ 3` 且 ≥2 位 → **互斥违规**。`may_subset = (fsType & 0x0100) == 0`；`embed_web` 由权限位与 bit8/bit9 共同决定；保留位：`fsType & 0xFCF1 != 0`（**0xFCF1** = bit0 + bits4–7 + bits10–15）→ 报保留位置位。
+1. **`fsType` 判定（先版本分流，再五元结论）** —— 本节是 `license-gate` 的**唯一**判定来源；
+   代码里的 `SPEC_REFS` 常量必须逐字复制 1.3 / 1.4 两表的字面量（有测试按表解析对账）。
+
+   **1.1 解析顺序（不可调换）**：① 读 `OS/2.version` → ② `bits = fsType & 0x000F` →
+   ③ 版本分流得 `perm`（1.2）→ ④ 读 bit8 / bit9 / 保留位 → ⑤ 由 `perm` + bit8 + bit9 推五元结论（1.3）。
+   **五元结论全部基于解析后的 `perm`，不基于原始位串** —— 这是"不做版本分流就会误报"的落点。
+
+   **1.2 `perm`（权限位解析值）**
+
+   | 条件 | `perm` | `permission_resolution` | 依据（§3.2 原文） |
+   |---|---|---|---|
+   | `bits` 中 bits1–3 恰有 1 位置位 | 该位的值（2 / 4 / 8） | `direct` | 合法值只有 0/2/4/8 |
+   | `bits` 中 bits1–3 全为 0（`bits ∈ {0x0000, 0x0001}`） | `0`（Installable） | `direct` | 值 0 = Installable；bit0 另按 1.4 单列 |
+   | `version ≤ 2` 且 bits1–3 有 ≥2 位 | **最宽松者**（序 8 > 4 > 2） | `least_restrictive` | "the least-restrictive permission indicated take precedence" |
+   | `version ≥ 3` 且 bits1–3 有 ≥2 位 | **最宽松者**（同上，仍解析） | `least_restrictive` | v3+ 互斥为强制；解析值照旧取最宽松，**违规独立成条**（1.4） |
+
+   **1.3 五元结论（每条一个判定式 + 一个 `spec_ref` 字面量）**
+
+   | 结论键 | 判定式（`perm` = 1.2 的解析值） | `spec_ref`（逐字使用） | 规范原句要点（§3.1） |
+   |---|---|---|---|
+   | `embed_pdf` | `perm != 2 and (fsType & 0x0200) == 0` | `MS-OS2 §fsType bits0-3 (0/4/8 allow document embedding)` | 0/4/8 均允许"embedded"进文档；2 须先取得明示许可；bit9 置位时"only bitmaps … may be embedded. No outline data may be embedded" → PDF 内嵌轮廓不成立 |
+   | `embed_app` | `perm == 0 and (fsType & 0x0200) == 0` | `MS-OS2 §fsType value 0 (permanent installation)` | 只有值 0 允许"permanently installed for use on remote systems, or for use by other users"；4/8 只允许"temporarily loaded"（随应用分发 = 永久安装/供他人使用） |
+   | `embed_web` | `perm != 2 and (fsType & 0x0100) == 0 and (fsType & 0x0200) == 0` | `MS-OS2 §fsType bits0-3 + bit8 (temporary loading for viewing, no subsetting)` | Web 字体 = "temporarily loaded … for purposes of viewing" **且** 交付前通常要子集 → bit8 "must not be subsetted prior to embedding" 与 bit9 轮廓禁令同时生效 |
+   | `may_subset` | `(fsType & 0x0100) == 0` | `MS-OS2 §fsType bit8 (No subsetting)` | bit8 原文只限制**子集**，不限制嵌入本身（故 bit8 置位时 `embed_pdf` 仍可为 true） |
+   | `may_modify` | `perm in (0, 8)` | `MS-OS2 §fsType bits0-3 (editing permitted / read-only)` | 8 = "editing is permitted … changes may be saved"；4 = "Documents … must be opened 'read-only'; no edits may be applied"；2 = "must not be modified"；0 = 用户取得与原购买者"identical rights" → `fsType` 不构成编辑限制 |
+
+   > **`may_modify` 的边界（必须照此措辞，不得扩写）**：该键只回答"`fsType` 是否禁止**文档/产物**被编辑或保存"，
+   > **不回答**"是否授予修改字体软件本身的权利"。`fsType` 是嵌入许可位，不是字体软件的再授权条款；
+   > 报告与文案不得据此写"可以改这个字体"。
+
+   **1.4 违规码（finding code → 级别 → `spec_ref`）** —— 只此六条，不另立
+
+   | `code` | 触发条件 | 级别 | `primary_key` | `spec_ref`（逐字使用） |
+   |---|---|---|---|---|
+   | `FSTYPE_BIT0_RESERVED` | `fsType & 0x0001` | `error` | `bit0` | `MS-OS2 §fsType bit0 (permanently reserved)` |
+   | `FSTYPE_RESERVED_BITS` | `fsType & 0xFCF0`（bits4–7 + bits10–15） | `version ≤ 1` → `warn`；`version ≥ 2` → `error` | `bits4-15` | `MS-OS2 §fsType bits4-7/bits10-15 (reserved)` |
+   | `FSTYPE_MUTUAL_EXCLUSION` | `version ≥ 3` 且 bits1–3 有 ≥2 位 | `error` | `bits0-3` | `MS-OS2 §fsType (v3+ mutually exclusive)` |
+   | `FSTYPE_NO_SUBSET` | `fsType & 0x0100` | `error` | `bit8` | `MS-OS2 §fsType bit8` |
+   | `FSTYPE_BITMAP_ONLY` | `fsType & 0x0200` | `warn` | `bit9` | `MS-OS2 §fsType bit9 (Bitmap embedding only)` |
+   | `FSTYPE_RESTRICTED_LICENSE` | `perm == 2` | `warn` | `bit1` | `MS-OS2 §fsType value 2 (Restricted License)` |
+
+   **1.5 为什么"取值非法（∉{0,2,4,8}）"不另立第三条码（可证）**：设 `bits = fsType & 0x000F`。
+   若 `bits ∉ {0,2,4,8}`，则二选一 —— ① `bits` 含 bit0（`0x0001`/`0x0003`/`0x0005`/…）→ 由
+   `FSTYPE_BIT0_RESERVED` 覆盖；② `bits` 不含 bit0 且 ∉{0,2,4,8} → 其 bits1–3 必置 ≥2 位（`0x0006`/`0x000A`/`0x000C`/`0x000E`）
+   → v3+ 由 `FSTYPE_MUTUAL_EXCLUSION` 覆盖、v0–v2 由 1.2 的"取最宽松"**吸收**（这正是 F2 的守护点）。
+   两条码并集 ⊇ 全部非法值，故不得再加第三条码（加了就会出现 F3 双报，打挂 golden）。
+
+   **1.6 保留位与版本**：`0xFCF1` = bit0 + bits4–7 + bits10–15（与 fontbakery 的 `0b1111110011110001` 一致，§二）。
+   1.4 把 bit0 与 bits4–15 **拆成两条码**：bit0 在任何版本都是"permanently reserved"（含 v0，§3.1 末段），
+   而 bits4–15 在 v0/v1 下规范要求"Applications must ignore bits 4 to 15"（§3.2 第三行）→ 故 v0/v1 降为 `warn`。
 2. **覆盖三分类**：对需求字符集 `R`，原字体 cmap 覆盖集 `S`，子集字体覆盖集 `T`：`MISSING_IN_SOURCE = R \ S`（是否报取决于 `--strict-source`，默认 report 为 `error`）；`LOST_IN_SUBSET = (R ∩ S) \ T`；`OK = R ∩ S ∩ T`。**glyph0 命中不计入覆盖**（映射到 `.notdef` 的码位视为缺）。
 3. **cmap 编码优先级**：`(3,10) → (0,4) → (3,1) → (0,3)`；仅含 `(1,0)`/format 0 等非 Unicode 映射的字体 → 输出 `SKIPPED(reason=no_unicode_cmap)`。多个同优先级子表同时存在时取并集，并在报告里列各子表的项数。
 4. **分区计数**：BMP = `U+0000–U+FFFF`；ExtA = `U+3400–U+4DBF`；ExtB+ = `U+20000–U+2FA1F`；其余按规范块名归入 `other`。

@@ -17,20 +17,16 @@
     "fsType": "0x0108",
     "permission_bits": "0x0008",
     "permission_name": "Editable",
+    "permission_resolution": "direct",
     "may_subset": false,
+    "embed_pdf": true,
+    "embed_app": false,
+    "embed_web": false,
+    "may_modify": true,
     "bit8_no_subsetting": true,
     "bit9_bitmap_only": false,
     "reserved_bits_set": false,
     "mutual_exclusion_violation": false,
-    "pending_conclusions": {
-      "keys": [
-        "embed_pdf",
-        "embed_app",
-        "embed_web",
-        "may_modify"
-      ],
-      "reason": "data/README.md §六.1 目前只定义了 may_subset 与保留位掩码；其余四条由 M2 先写入口径表再实现（plan/01 §三 禁第二套口径）"
-    },
     "expected_findings": [
       {
         "code": "FSTYPE_NO_SUBSET",

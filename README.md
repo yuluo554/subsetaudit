@@ -5,7 +5,7 @@
 **审的是产物，不是字体项目。** 输入 = 原字体 + 子集字体 + 必须支持的字符集；
 输出 = 子集是否真覆盖、GSUB/GPOS 是否被弄坏、许可是否允许子集、元数据是否被剥掉。
 
-- **版本**：v0.1.0.dev0（M1 数据层完成，判定待 M2–M5）
+- **版本**：v0.1.0.dev0（M2 许可闸门完成；覆盖/布局/元数据判定待 M3–M5）
 - **交付形态**：纯本地 **Python CLI**（零网络、零模型、零商用字体）
 - **运行期依赖**：`fonttools`（唯一）｜**Python** ≥ 3.8
 
@@ -35,25 +35,48 @@ py -m venv .venv
 > **前置条件**：`pip install -e .` 需要 pip ≥ 21.3（PEP 660）。Python 3.8 的 `venv` 自带
 > pip 20.2.3，**不先升级会报** `editable mode currently requires a setup.py based build`。
 
-## 现状（M1 数据先行完成）
+## 现状（M2 许可闸门完成）
 
 | 里程碑 | 内容 | 状态 |
 |---|---|---|
 | M0 | 方法论装订 + 计划套件 + 可运行骨架 | ✅ |
 | M1 | 数据先行：F1–F6 fixture 生成器 + `fonts.lock` | ✅ |
-| M2 | `license-gate` 许可闸门（`OS/2.version` 分流） | ⬜ |
+| M2 | `license-gate` 许可闸门（`OS/2.version` 分流） | ✅ |
 | M3 | `coverage-diff` 覆盖差集（三分类 + 回退链） | ⬜ |
 | M4 | `layout-survival` 布局保真（Type 7 解包） | ⬜ |
 | M5 | `metadata` + `report`（cmap↔OS/2 交叉一致性） | ⬜ |
 | M6 | 发布：GitHub 公开仓库 v0.1.0 | ⬜ |
 
-> 状态语义：`✅` 已完成、`⬜` 未开始。**五个子命令能跑、退出码正确，但判定尚未实现**，
-> 每个命令会输出 `SKIPPED(reason=module_not_implemented_in_m0)` —— 这是**显式跳过**，不是静默通过。
-> M1 只落**数据层**（fixture 生成器 + OFL 字体锁文件），不改变任何子命令的行为。
+> 状态语义：`✅` 已完成、`⬜` 未开始。**`license-gate` 已产出真实判定**（五元结论 + 六条违规码，
+> 每条带 `spec_ref`）；其余四个子命令仍输出 `SKIPPED(reason=module_not_implemented_in_m0)` ——
+> 这是**显式跳过**，不是静默通过。
+
+### `license-gate` 输出形状
+
+```json
+"summary": {
+  "fsType": "0x0108", "os2_version": 4,
+  "permission_bits": "0x0008", "permission_name": "Editable",
+  "permission_resolution": "direct",
+  "conclusions": {
+    "embed_pdf":  { "value": true,  "spec_ref": "MS-OS2 §fsType bits0-3 (0/4/8 allow document embedding)" },
+    "embed_app":  { "value": false, "spec_ref": "MS-OS2 §fsType value 0 (permanent installation)" },
+    "embed_web":  { "value": false, "spec_ref": "MS-OS2 §fsType bits0-3 + bit8 (temporary loading for viewing, no subsetting)" },
+    "may_subset": { "value": false, "spec_ref": "MS-OS2 §fsType bit8 (No subsetting)" },
+    "may_modify": { "value": true,  "spec_ref": "MS-OS2 §fsType bits0-3 (editing permitted / read-only)" }
+  },
+  "violations": ["FSTYPE_NO_SUBSET"]
+}
+```
+
+判定式与六条违规码的**唯一来源**是 `data/README.md` §六.1；代码里的 `spec_ref` 是那张表的逐字副本
+（有测试解析该表做对账，改一边不改另一边必红）。`may_modify` 只回答"`fsType` 是否禁止文档/产物被编辑"，
+**不回答**"是否授予修改字体软件本身的权利"。
 
 ## 三个场景（最小复现命令）
 
-> 以下命令在 **M2–M5 落地后**才产生真实判定；M0 阶段它们的退出码已正确，输出里带 `SKIPPED`。
+> 以下命令中，`license-gate` 已产出真实判定（M2）；`coverage-diff` / `layout-survival` / `metadata`
+> 在 M3–M5 落地前退出码已正确、输出里带 `SKIPPED`。
 > 未标注 `<...>` 的参数都是真实路径；尖括号是占位符，请替换。
 
 ### 场景一：许可闸门（能不能嵌、能不能子集）

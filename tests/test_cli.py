@@ -96,13 +96,33 @@ def test_coverage_diff_unreadable_corpus_is_exit_2(simple_font, tmp_path, capsys
 
 
 # ── 退出码 0 + SKIPPED 显式 ─────────────────────────────────────────────────
-def test_license_gate_skeleton_exits_zero_with_visible_skipped(simple_font, capsys):
+def test_license_gate_real_verdict_exits_zero(simple_font, capsys):
+    """M2 起 `license-gate` 出真实结论：合成字体 `fsType=0x0000` → Installable 全放行。
+
+    这里**不再**断言 `SKIPPED`：该字体有 OS/2 表，跳过是错的（M0 的断言已随 M2 退役）。
+    """
     r = run(["license-gate", simple_font], capsys)
     assert r.code == cli.EXIT_OK, r.out
     body = r.json()
     assert body["findings"] == []
-    assert [s["reason"] for s in body["skipped"]] == ["module_not_implemented_in_m0"]
+    assert body["skipped"] == []
     assert body["inputs"]["font"] == os.path.basename(simple_font)
+    assert body["summary"]["permission_name"] == "Installable"
+    assert body["summary"]["conclusions"]["embed_app"]["value"] is True
+
+
+def test_license_gate_without_os2_table_skips_but_still_exit_zero(tmp_path, capsys):
+    """无 OS/2 表 → `SKIPPED(reason=no_os2_table)`，退出码 0（§六.1 不适用，不猜）。"""
+    from conftest import build_font
+
+    path = str(tmp_path / "noos2.ttf")
+    build_font(path, cmap={0x61: "a"}, include_os2=False)
+    r = run(["license-gate", path], capsys)
+    assert r.code == cli.EXIT_OK, r.out
+    body = r.json()
+    assert body["findings"] == []
+    assert [s["reason"] for s in body["skipped"]] == ["no_os2_table"]
+    assert "conclusions" not in body["summary"]
 
 
 def test_all_five_subcommands_exit_zero(simple_font, corpus_file, capsys):
@@ -119,8 +139,12 @@ def test_all_five_subcommands_exit_zero(simple_font, corpus_file, capsys):
         r = run(argv, capsys)
         assert r.code == cli.EXIT_OK, "%r -> %s %s" % (argv, r.code, r.out)
         body = r.json()
-        assert body["skipped"], "M0 的每个子命令都必须把 SKIPPED 显式写进输出: %r" % (argv,)
         assert body["inputs"].get("source") is None or not os.path.isabs(body["inputs"]["source"])
+    # 骨架未实现的模块仍必须把 SKIPPED 显式写进输出；`license-gate` 已实现（M2），
+    # 它的"无结论"不再以 SKIPPED 表达，所以单独判（见 test_license_gate_real_verdict_exits_zero）。
+    for argv in cases[1:]:
+        r = run(argv, capsys)
+        assert r.json()["skipped"], "未实现的模块必须把 SKIPPED 显式写进输出: %r" % (argv,)
 
 
 def test_report_markdown_format(simple_font, capsys):
@@ -245,12 +269,24 @@ def test_console_script_entry_point_matches_cli_main():
 
 
 def test_skeleton_modules_do_not_fabricate_findings():
-    """M0 纪律：未实现的模块只准返回 SKIPPED，不得返回任何 finding。"""
-    for name in ("license_gate", "coverage_diff", "layout_survival", "metadata"):
+    """未实现的模块只准返回 SKIPPED，不得返回任何 finding。
+
+    **M2 起 `license_gate` 已实现判定**，从本判据的断言面里移除（它的"不伪造"由
+    `tests/test_license_gate.py` 的 golden 逐项承担）；其余三个模块仍是骨架。
+    """
+    for name in ("coverage_diff", "layout_survival", "metadata"):
         mod = __import__("subsetaudit.%s" % name, fromlist=[name])
         text = io.open(mod.__file__, "r", encoding="utf-8").read() if hasattr(mod, "__file__") else ""
         assert "skeleton_result(" in text, "%s 未走骨架出口" % name
         assert "finding(" not in text, "%s 在 M0 里不得构造 finding" % name
+
+
+def test_license_gate_is_no_longer_a_skeleton():
+    """M2 已实现：`license_gate` 不再走骨架出口（反向判据，防"翻完 ✅ 又退回骨架"）。"""
+    from subsetaudit import license_gate
+    text = io.open(license_gate.__file__, "r", encoding="utf-8").read()
+    assert "skeleton_result(" not in text
+    assert "module_not_implemented_in_m0" not in text
 
 
 def test_no_font_binaries_tracked_by_git():

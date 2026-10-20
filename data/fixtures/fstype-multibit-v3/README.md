@@ -12,19 +12,22 @@ F2 与 F3 的差别**只有两处**：`OS/2.version`（0 vs 3），以及由版�
 ## 真值来源
 
 `bits = 0x000E`，`version = 3 ≥ 3` → **互斥违规**（`error`）。
-最宽松权限仍是 Editable，但违规本身独立成条 —— 两者不互相抵消。
+最宽松权限仍是 Editable（`least_restrictive`），五元结论与 F2 **完全相同** —— 违规本身独立成条，两者不互相抵消（这是 F2/F3 对照的判别点）。
 
 ## 期望（`expect.json` 摘要）
 
 ```
 bit8_no_subsetting: false
 bit9_bitmap_only: false
+embed_app: false
+embed_pdf: true
+embed_web: true
 expected_findings: [{"code": "FSTYPE_MUTUAL_EXCLUSION", "severity": "error", "spec_ref": "MS-OS2 §fsType (v3+ mutually exclusive)"}]
 fsType: "0x000E"
+may_modify: true
 may_subset: true
 mutual_exclusion_violation: true
 os2_version: 3
-pending_conclusions: {"keys": ["embed_pdf", "embed_app", "embed_web", "may_modify"], "reason": "data/README.md §六.1 目前只定义了 may_subset 与保留位掩码；其余四条由 M2 先写入口径表再实现（plan/01 §三 禁第二套口径）"}
 permission_bits: "0x000E"
 permission_name: "Editable"
 permission_resolution: "least_restrictive"

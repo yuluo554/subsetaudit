@@ -122,6 +122,31 @@ def digest(report):
     return hashlib.sha256(dumps(report).encode("utf-8")).hexdigest()
 
 
+def _render_conclusions(summary):
+    """``summary["conclusions"]`` 的人读视图（结构由各模块定，此处只渲染，不解释）。
+
+    形状：``{key: {"value": bool, "spec_ref": str}}``；没有该键的模块不渲染本节
+    （M3–M5 的 summary 不带 conclusions → 它们的 Markdown 视图与 M2 之前逐字节一致）。
+    """
+    conclusions = summary.get("conclusions") or {}
+    if not conclusions:
+        return []
+    lines = ["## 结论", "", "| 结论 | 值 | 依据 |", "|---|---|---|"]
+    for key in conclusions:
+        item = conclusions[key] or {}
+        value = item.get("value")
+        lines.append(
+            "| `%s` | %s | %s |"
+            % (
+                key,
+                "true" if value else "false",
+                ("`%s`" % item["spec_ref"]) if item.get("spec_ref") else "—",
+            )
+        )
+    lines.append("")
+    return lines
+
+
 def render_markdown(report):
     """人读视图：只是渲染，不参与 digest、不参与退出码。"""
     lines = []
@@ -170,6 +195,7 @@ def render_markdown(report):
                 )
             )
     lines.append("")
+    lines.extend(_render_conclusions(summary))
     lines.append("## 跳过")
     lines.append("")
     skips = report.get("skipped", [])

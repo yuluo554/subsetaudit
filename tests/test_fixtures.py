@@ -222,6 +222,51 @@ def test_fstype_golden_matches_actual_font(fid):
     font.close()
 
 
+@pytest.mark.parametrize("fid", ["F1", "F2", "F3"])
+def test_fstype_golden_five_conclusions_are_independently_recomputable(fid):
+    """五元结论在 golden 里必须**可由输入独立复算**（`plan/04` §4 真值纪律）。
+
+    这里刻意不 import ``subsetaudit.license_gate``：golden 的真值不能由被测实现背书，
+    否则"实现改了、golden 跟着改"会一起绿。判定式照抄 `data/README.md` §六.1.3。
+    """
+    from fontTools.ttLib import TTFont
+
+    with io.open(_expect_path(fid), "r", encoding="utf-8") as fh:
+        body = json.load(fh)
+    exp = body["expect"]
+    assert "pending_conclusions" not in exp, "M2 起 golden 必须填全五元结论"
+
+    font_path = os.path.join(FIXTURES_ROOT, NAMES[fid], "out", body["font"])
+    font = TTFont(font_path, lazy=True)
+    os2 = font["OS/2"]
+    fs_type = os2.fsType
+    font.close()
+
+    bits = fs_type & 0x000E  # bits1–3
+    if bits == 0:
+        perm = 0
+    elif bin(bits).count("1") == 1:
+        perm = bits
+    else:  # 最宽松：8 > 4 > 2
+        perm = 8 if bits & 8 else (4 if bits & 4 else 2)
+
+    bit8 = (fs_type & 0x0100) != 0
+    bit9 = (fs_type & 0x0200) != 0
+    recomputed = {
+        "embed_pdf": (perm != 2) and not bit9,
+        "embed_app": (perm == 0) and not bit9,
+        "embed_web": (perm != 2) and not bit8 and not bit9,
+        "may_subset": not bit8,
+        "may_modify": perm in (0, 8),
+    }
+    assert dict((k, exp[k]) for k in recomputed) == recomputed
+    # 解析值本身也要在 golden 里落字（`permission_name` + `permission_resolution`）
+    assert exp["permission_name"] == {0: "Installable", 2: "Restricted",
+                                      4: "Preview & Print", 8: "Editable"}[perm]
+    assert exp["permission_resolution"] == ("least_restrictive"
+                                            if bin(bits).count("1") >= 2 else "direct")
+
+
 def test_f2_and_f3_differ_only_in_os2_version_and_table_length():
     """F2/F3 是版本分流的唯一判别样本。
 
@@ -306,8 +351,8 @@ def test_corrupted_generator_is_caught_by_self_check(tmp_path):
     """变异：把 F2 的 `fsType` 从 0x000E 改成 0x0002（单权限位）。
 
     期望的双层判据：
-      ① 生成期自证（``self_check``）必须失败 —— 因为 `permission_resolution` 期望
-         "least_restrictive" 而单权限位不满足；
+      ① 生成期自证（``self_check``）必须失败 —— 单权限位的解析是 `direct` 且权限名
+         `Restricted`，与期望的 `least_restrictive` / `Editable` 两处都不符（§六.1.2）；
       ② 若自证被绕过，golden 测试也会红 —— 这里直接断言 ①（生成期就拦住）。
     """
     import gen_fixtures as gen

@@ -10,7 +10,8 @@
 
 ## 真值来源
 
-`bits = 0x000E`，`version = 0 <= 2` → 取最宽松 = bit3 Editable；`may_subset = (0x000E & 0x0100) == 0` → `true`。
+`bits = 0x000E`，`version = 0 <= 2` → 取最宽松 = bit3 Editable（`least_restrictive`）；`may_subset = (0x000E & 0x0100) == 0` → `true`。
+其余四条：`embed_pdf = true`、`embed_app = false`（perm≠0）、`embed_web = true`（perm≠2 且 bit8/bit9 均未置位）、`may_modify = true`。
 规范原文：「the least-restrictive permission indicated take precedence」（`data/README.md` §3.2）。
 
 ## 期望（`expect.json` 摘要）
@@ -19,12 +20,15 @@
 bit8_no_subsetting: false
 bit9_bitmap_only: false
 counterexample_guard: "v0 的 bits0–3 多位并存必须解析为最宽松权限，不得误报互斥"
+embed_app: false
+embed_pdf: true
+embed_web: true
 expected_findings: []
 fsType: "0x000E"
+may_modify: true
 may_subset: true
 mutual_exclusion_violation: false
 os2_version: 0
-pending_conclusions: {"keys": ["embed_pdf", "embed_app", "embed_web", "may_modify"], "reason": "data/README.md §六.1 目前只定义了 may_subset 与保留位掩码；其余四条由 M2 先写入口径表再实现（plan/01 §三 禁第二套口径）"}
 permission_bits: "0x000E"
 permission_name: "Editable"
 permission_resolution: "least_restrictive"
