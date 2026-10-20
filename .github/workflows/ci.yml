@@ -1,0 +1,55 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: "test / py${{ matrix.python }} / ${{ matrix.os }}"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.8", "3.12"]
+    # 三条编码纪律：PYTHONUTF8 救 CI 全部步骤（`py -X utf8` 只是本机习惯，
+    # 它改不了 CI 和子进程）；PYTHONDONTWRITEBYTECODE 防 pyc 偶发损坏污染测试；
+    # PYTHONIOENCODING 兜底 stdio。
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Setup Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      # 注意：用 `python` 而不是 `py`——`py` 是 Windows 专用启动器，ubuntu runner 上没有。
+      - name: "Sprint layout gate (methodology binding)"
+        run: python tools/check_sprint_layout.py
+
+      - name: "Desensitization gate (no host paths / usernames / local proxy)"
+        run: python tools/check_desensitized.py
+
+      - name: "Gate mutation verification (every judging rule must be falsifiable)"
+        run: python tools/verify_gates.py
+
+      - name: "Install (editable) with dev extras"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: "Tests"
+        run: python -m pytest -q
+
+      # 每条已交付命令都要有一条离线冒烟（"绿矩阵"不是"它跑过"的证据）
+      - name: "Smoke — five subcommands on a synthetic font"
+        run: python tools/smoke_cli.py

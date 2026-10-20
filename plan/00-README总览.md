@@ -1,3 +1,5 @@
+> 方法论：`ai-tool-project-sprint`（装订 2026-10-21）｜布局门：`py tools/check_sprint_layout.py`｜脱敏门：`py tools/check_desensitized.py`｜续接对话第一件事 = 跑这两条门
+
 # 00 · README 总览 — 10-21-subset-audit（字体派生产物体检：子集正确性审计）
 
 - 性质：不参赛项目题 · 发布 GitHub **公开仓库** · 署名 yuluo554
@@ -14,10 +16,15 @@
 | plan/01-题目文档.md | 十段式题目定稿（生态基线、覆盖度三层结论、子集实测七项、五模块、评分、锚点、边界） | ✅ v1 |
 | data/README.md | 依据查证记录（三态 + URL + 检索窗口）/ `fsType` 规范台账 / 子集实测七项台账 / 560 字体分布 + 不可外推声明 / 数值口径 / **更正记录** / 未核实项 | ✅ v1 |
 | .gitignore | 字体二进制与 fixture 产物不入仓 | ✅ v1 |
-| plan/02-架构与技术选型.md | 分层架构、只读表访问层、确定性架构、退出码契约、选型与弃选 | ⏳ M1 前产出 |
-| plan/03-模块详设.md | 五子命令 + 共享层的接口、数据结构、处理顺序、失败路径、测试点 | ⏳ M1 前产出 |
-| plan/04-数据计划.md | fixture 生成器确定性纪律、6 类破损 fixture 设计、golden 纪律、`fonts.lock` | ⏳ M1 产出 |
-| plan/05-里程碑.md | 每周可演示物、出口门、环境事实、风险预案 | ⏳ M1 前产出 |
+| plan/02-架构与技术选型.md | 分层架构、只读表访问层、确定性架构、退出码契约、选型与弃选 | ✅ v1（M0） |
+| plan/03-模块详设.md | 五子命令 + 共享层的接口、数据结构、处理顺序、失败路径、测试点 | ✅ v1（M0） |
+| plan/04-数据计划.md | fixture 生成器确定性纪律、6 类破损 fixture 设计、golden 纪律、`fonts.lock` | ✅ v1（M0） |
+| plan/05-里程碑.md | 每周可演示物、出口门、环境事实、风险预案 | ✅ v1（M0） |
+| plan/06-交付对标与决策.md | 评分对标、缺口表、验收门、风险登记、追加决策 | ✅ v1（M0） |
+| AGENTS.md | 仓库锚点：方法论名 + 布局门命令 + 强制布局 + 环境禁忌 | ✅ v1（M0） |
+| tools/check_sprint_layout.py | 布局门（12 组变异验证） | ✅ v1（M0） |
+| tools/check_desensitized.py | 脱敏门（4 组注入验证） | ✅ v1（M0） |
+| src/subsetaudit/ | 五子命令骨架 + 共享层（sfnt / cmapset / canonical） | ✅ v1（M0，判定待 M2–M5） |
 | plan/HANDOFF-M*.md | 各里程碑交接快照 | ⏳ 随里程碑 |
 | plan/RELEASE-M6.md | 发布留档（tag 时点事实 / tag 后追加事实分栏） | ⏳ M6 |
 
@@ -78,14 +85,15 @@
 
 ## 里程碑
 
-| 里程碑 | 目标 | DoD（出口门） |
-|---|---|---|
-| **M1 数据先行** | 6 类合成破损 fixture（F1–F6）+ OFL 字体回归套件 | `tools/gen_fixtures.py` 可重建全部 fixture；`tools/fetch_fonts.py --check` 校验 `fonts.lock` 哈希；每条 fixture 有 `expect.json` 与说明；**生成期自证**（用独立 oracle 复算计数与分类，不符即失败）；仓库内无任何字体二进制 |
-| **M2 许可闸门** | `license-gate` | `0x000E`+v0 不误报、`0x0108` 判禁子集、v3 多位并存必报；每条结论带规范条款引用；F1/F2/F3 golden 逐项一致 |
-| **M3 覆盖差集** | `coverage-diff` | 复现 `--text="汉字abc"` 静默丢字并判 `LOST_IN_SUBSET`；pdfcraft#381 字组"高频在、中频缺"指纹可复现；非 Unicode cmap 走 `SKIPPED`；F4 golden 一致 |
-| **M4 布局保真** | `layout-survival` | Arial 784 条连字规则正确计数（朴素 0 条作对照）；默认丢弃标签（`ss01`/`case`/`tnum`…）被列出；`uniFB01 → glyph00003` 改名被认出 |
-| **M5 元数据与报告** | `metadata` + `report` | msyh 码页矛盾被抓住而 `ulUnicodeRange1=0` **不**误报；F5/F6 golden 一致；退出码 0/1/2 三档 fixture；报告逐字节确定 |
-| **M6 发布** | GitHub **公开仓库** v0.1.0 | **DoD = git tag + GitHub Release 附产物 + 发布留档三件套**（`plan/RELEASE-M6.md` 记 tag 时点事实与 tag 后追加事实）；干净环境 `pip install -e .` 后五子命令可用；`LICENSE`（MIT）与 `pyproject.toml` license 字段一致 |
+| 里程碑 | 目标 | DoD（出口门） | 状态 |
+|---|---|---|---|
+| **M0 装订与骨架** | `AGENTS.md` + 两道门 + `plan/00–06` + 可运行五子命令骨架 | `py tools/check_sprint_layout.py` 全绿（12 组变异已验证）；`subsetaudit --help` 与五子命令可跑；`pip install -e .` 可用 | ✅ |
+| **M1 数据先行** | 6 类合成破损 fixture（F1–F6）+ OFL 字体回归套件 | `tools/gen_fixtures.py` 可重建全部 fixture；`tools/fetch_fonts.py --check` 校验 `fonts.lock` 哈希；每条 fixture 有 `expect.json` 与说明；**生成期自证**（用独立 oracle 复算计数与分类，不符即失败）；仓库内无任何字体二进制 | ⬜ |
+| **M2 许可闸门** | `license-gate` | `0x000E`+v0 不误报、`0x0108` 判禁子集、v3 多位并存必报；每条结论带规范条款引用；F1/F2/F3 golden 逐项一致 | ⬜ |
+| **M3 覆盖差集** | `coverage-diff` | 复现 `--text="汉字abc"` 静默丢字并判 `LOST_IN_SUBSET`；pdfcraft#381 字组"高频在、中频缺"指纹可复现；非 Unicode cmap 走 `SKIPPED`；F4 golden 一致 | ⬜ |
+| **M4 布局保真** | `layout-survival` | Type 7 解包后规则数正确（朴素遍历作对照）；默认丢弃标签被列出；`uniFB01 → glyph00003` 改名被认出 | ⬜ |
+| **M5 元数据与报告** | `metadata` + `report` | msyh 码页矛盾被抓住而 `ulUnicodeRange1=0` **不**误报（以 OFL 同构样本复现）；F5/F6 golden 一致；退出码 0/1/2 三档 fixture；报告逐字节确定 | ⬜ |
+| **M6 发布** | GitHub **公开仓库** v0.1.0 | **DoD = git tag + GitHub Release 附产物 + 发布留档三件套**（`plan/RELEASE-M6.md` 记 tag 时点事实与 tag 后追加事实）；干净环境 `pip install -e .` 后五子命令可用；`LICENSE`（MIT）与 `pyproject.toml` license 字段一致 | ⬜ |
 
 **环境事实（口径随行）**：本机 Python **3.8.8**（因此不依赖 `tomllib`，所有锁文件/基线走 JSON 或受限 TOML 子集）；fontTools 4.57.0（`pyftsubset` 行为随版本漂移：`layout_features` 默认集、`prune_*` 默认值、`recalcCodePageRanges` 回退均在 4.x 内变动过）→ **报告必须写 `fonttools_version`；fixture golden 与 fontTools 版本绑定，升级需重跑 `tools/gen_fixtures.py --check`**。
 

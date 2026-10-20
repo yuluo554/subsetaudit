@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "subsetaudit"
+version = "0.1.0.dev0"
+description = "字体派生产物体检：子集正确性审计（覆盖 / 布局 / 许可 / 元数据）"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "yuluo554" }]
+keywords = ["font", "opentype", "subset", "audit", "fonttools"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.8",
+  "License :: OSI Approved :: MIT License",
+  "Environment :: Console",
+  "Topic :: Text Processing :: Fonts",
+]
+dependencies = ["fonttools>=4.40,<5"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7,<9"]
+
+[project.scripts]
+subsetaudit = "subsetaudit.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/yuluo554/subsetaudit"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

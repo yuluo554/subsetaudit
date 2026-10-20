@@ -1,0 +1,19 @@
+# 归一化：源码行尾一律 LF（Windows 上 clone 也不会带 CRLF 进仓）
+* text=auto eol=lf
+
+# 二进制与快照冻结：**被 sha256 登记过、或字节形态本身是被测对象**的文件，git 不许碰
+*.ttf binary
+*.otf binary
+*.ttc binary
+*.woff binary
+*.woff2 binary
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.gz binary
+*.pdf binary
+*.exe binary
+*.dll binary
+*.pyc binary
