@@ -20,9 +20,20 @@ subset profile，**三个月内可被复制**。唯一防守是**输入形状不
 
 ```bash
 py -m venv .venv
-./.venv/Scripts/py -m pip install -e ".[dev]"    # Git Bash；Windows cmd 用 .venv\Scripts\python
-subsetaudit --version
+# Windows（Git Bash / cmd 都是这个路径；venv 里没有 `py` 启动器，必须直接调 venv 的 python）
+./.venv/Scripts/python.exe -m pip install --upgrade pip        # 必须：3.8 的 venv 自带 pip 20.2.3，不支持 PEP 660 可编辑安装
+./.venv/Scripts/python.exe -m pip install -e ".[dev]"
+# Linux / macOS
+# ./.venv/bin/python -m pip install --upgrade pip
+# ./.venv/bin/python -m pip install -e ".[dev]"
+
+./.venv/Scripts/subsetaudit.exe --version     # Git Bash；cmd 用 .venv\Scripts\subsetaudit.exe
+# 或者不装也行（源码树直接跑）：
+# PYTHONPATH=src py -X utf8 -m subsetaudit --version
 ```
+
+> **前置条件**：`pip install -e .` 需要 pip ≥ 21.3（PEP 660）。Python 3.8 的 `venv` 自带
+> pip 20.2.3，**不先升级会报** `editable mode currently requires a setup.py based build`。
 
 ## 现状（M0 骨架）
 
@@ -108,9 +119,14 @@ subsetaudit report --source <source.ttf> --subset <subset.ttf> --text "abc" --fo
 ## 开发
 
 ```bash
-py tools/check_sprint_layout.py     # 布局门（方法论装订；新对话第一件事）
+# 门（每棒第一件事）
+py tools/check_sprint_layout.py     # 布局门（方法论装订）
 py tools/check_desensitized.py      # 脱敏门
-py -X utf8 -m pytest -q             # 测试
+py tools/verify_gates.py            # 两道门的变异验证（16 组必须全红）
+
+# 测试（仓库根目录；tests/ 会自己把 src/ 放进路径）
+PYTHONPATH=src py -X utf8 -m pytest -q
+# 或装好之后：./.venv/Scripts/python.exe -m pytest -q
 ```
 
 后续里程碑（M1 起）会用到这些脚本，**当前尚未实现**（见 `plan/05` 与 `plan/06` 缺口表）：

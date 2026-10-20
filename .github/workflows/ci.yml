@@ -47,6 +47,19 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
+      # README 的安装段必须在"干净 venv"里真敲一遍（含升级 pip 这个前置条件）——
+      # clone 有 .git 和已装依赖，结构上就比用户环境多东西（发布包实测纪律）。
+      - name: "README install path (clean venv, real keystrokes)"
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv .venv-readme
+          if [ -x .venv-readme/bin/python ]; then VPY=.venv-readme/bin/python; SUB=.venv-readme/bin/subsetaudit; else VPY=.venv-readme/Scripts/python.exe; SUB=.venv-readme/Scripts/subsetaudit.exe; fi
+          "$VPY" -m pip install --upgrade pip
+          "$VPY" -m pip install -e ".[dev]"
+          "$SUB" --version
+          "$SUB" license-gate does-not-exist.ttf || test $? -eq 2
+
       - name: "Tests"
         run: python -m pytest -q
 
