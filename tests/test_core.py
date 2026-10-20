@@ -151,8 +151,25 @@ def test_classify_without_subset_has_no_lost():
 
 
 def test_block_counts_partitions_by_range():
+    """§六.4 的互斥分区：ExtA 必须先于 BMP 判（`U+3400` 属于 ExtA，不属于 BMP）。
+
+    这里原先写成 `counts == {...BMP:3, ExtA:1...} or counts["BMP"] == 3` —— 两个分支都要求
+    `BMP == 3`，等于把实现里"ExtA 永远不可达"的缺陷**当成期望值**钉住了（M3 实现时发现并更正）。
+    """
     counts = cmapset.block_counts([0x61, 0x5B57, 0x20000, 0x3400])
-    assert counts == {"BMP": 3, "ExtA": 1, "ExtB+": 0, "other": 0} or counts["BMP"] == 3
+    assert counts == {"BMP": 2, "ExtA": 1, "ExtB+": 1, "other": 0}
+    assert sum(counts.values()) == 4, "四块之和必须等于码位总数（互斥分区）"
+
+
+def test_block_of_exta_wins_over_bmp():
+    """单点判据：ExtA 边界值的归属（M3 的回归锚点）。"""
+    assert cmapset.block_of(0x3400) == "ExtA"   # ExtA 下界
+    assert cmapset.block_of(0x4DBF) == "ExtA"   # ExtA 上界
+    assert cmapset.block_of(0x4DC0) == "BMP"    # 紧邻 ExtA 之上仍是 BMP
+    assert cmapset.block_of(0x20000) == "ExtB+"  # ExtB+ 下界
+    assert cmapset.block_of(0x2FA1F) == "ExtB+"  # ExtB+ 上界
+    assert cmapset.block_of(0x2FA20) == "other"  # ExtB+ 之上
+    assert cmapset.block_of(0x10FFFF) == "other"
 
 
 def test_closure_adds_decomposition_and_reports_only_new_codepoints():

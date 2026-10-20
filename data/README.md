@@ -175,6 +175,27 @@
 > 说明实现与台账口径没有分叉。**仍未验证**：`.ttc` 集合字体（§五 未计入，本表也未计入）、
 > 以及非 Windows 字体池的分布（本表**不可外推**，理由同 §五 的不可外推声明）。
 
+### 5.2 M3 实现回填：真实 OFL 字体上的 pdfcraft#381 指纹（✅ 2026-10-21）
+
+用交付实现 `coverage_diff.evaluate()` 在 `data/fonts/NotoSansSC-Regular.otf`（OFL 1.1，§八锁文件）
+上复现"按词表切"的指纹。构造：源 = 该字体；产物 = `fontTools.subset` + `--text="字段列表保存全部页面区块删除"`
+（**只写 `_scratch/`，不入仓**）；需求集 = `plan/01` §三 M2 验收② 的 29 个汉字。
+
+| 项 | 实测 |
+|---|---|
+| 需求集 | 29 个码位（BMP 29） |
+| `OK` | **6** —— `全 删 区 块 存 页`（词表与 29 字的交集） |
+| `LOST_IN_SUBSET` | **23** —— 其余（`划务单图处导护旋码离突签线绪获账转选释钮需顺馈` 等） |
+| `MISSING_IN_SOURCE` | **0** —— Noto Sans SC 覆盖全 29 字 |
+| `severity` | 23 条全部 `error`（`LOST_IN_SUBSET` 恒 `error`） |
+| `fallback_hint` | `BMP: lost=23, subset_available_in_block=14` |
+| cmap 选表 | 源 `(3,10)/format 12`（**30,890** 项）→ 产物 `(3,1)/format 4`（**14** 项） |
+
+> 意义：这条指纹**不依赖任何商用字体**即可复现，且与 `plan/01` 记录的原始现象同构
+> （高频词表字在、中频专业字缺）。测试 `tests/test_coverage_diff.py::test_pdfcraft_381_fingerprint_on_real_ofl_font`
+> 在字体未下载时**显式 skip**（不假装跑过）。**不可外推**：这是**一个** OFL 字体 + **一个**词表的
+> 单次观察，不是"词表子集普遍如此"的统计结论。
+
 ## 六、数值口径（**一处定义**）
 
 1. **`fsType` 判定（先版本分流，再五元结论）** —— 本节是 `license-gate` 的**唯一**判定来源；
@@ -227,9 +248,65 @@
    **1.6 保留位与版本**：`0xFCF1` = bit0 + bits4–7 + bits10–15（与 fontbakery 的 `0b1111110011110001` 一致，§二）。
    1.4 把 bit0 与 bits4–15 **拆成两条码**：bit0 在任何版本都是"permanently reserved"（含 v0，§3.1 末段），
    而 bits4–15 在 v0/v1 下规范要求"Applications must ignore bits 4 to 15"（§3.2 第三行）→ 故 v0/v1 降为 `warn`。
-2. **覆盖三分类**：对需求字符集 `R`，原字体 cmap 覆盖集 `S`，子集字体覆盖集 `T`：`MISSING_IN_SOURCE = R \ S`（是否报取决于 `--strict-source`，默认 report 为 `error`）；`LOST_IN_SUBSET = (R ∩ S) \ T`；`OK = R ∩ S ∩ T`。**glyph0 命中不计入覆盖**（映射到 `.notdef` 的码位视为缺）。
-3. **cmap 编码优先级**：`(3,10) → (0,4) → (3,1) → (0,3)`；仅含 `(1,0)`/format 0 等非 Unicode 映射的字体 → 输出 `SKIPPED(reason=no_unicode_cmap)`。多个同优先级子表同时存在时取并集，并在报告里列各子表的项数。
-4. **分区计数**：BMP = `U+0000–U+FFFF`；ExtA = `U+3400–U+4DBF`；ExtB+ = `U+20000–U+2FA1F`；其余按规范块名归入 `other`。
+2. **覆盖三分类** —— 本节是 `coverage-diff` 的**唯一**判定来源。
+   记号：需求字符集（输入原文）`R0`；闭包后的需求集 `R`（见 **2.1**，三分类**只用 `R0`**）；
+   原字体 Unicode cmap 覆盖集 `S`；子集字体 Unicode cmap 覆盖集 `T`。
+
+   | 分类 | 判定式 | 级别 | `primary_key` | `spec_ref`（逐字使用） |
+   |---|---|---|---|---|
+   | `MISSING_IN_SOURCE` | `R0 \ S` | **默认 `warn`**；`--strict-source` → `error` | `U+XXXX` | `data/README §6.2` |
+   | `LOST_IN_SUBSET` | `(R0 ∩ S) \ T` | 恒 `error` | `U+XXXX` | `data/README §6.2` |
+   | `OK` | `R0 ∩ S ∩ T` | 不产 finding（只进 `summary.coverage.OK`） | — | — |
+
+   - **`--strict-source` 的语义**：只把 `MISSING_IN_SOURCE` 的级别由默认 `warn` 提升为 `error`
+     （原文缺字才让退出码变 1）。它**不改变**三分类归属、不改变 `LOST_IN_SUBSET` 的级别、不加新码。
+     默认 `warn` 的理由：本工具审的是**产物**，原文缺字是语料/源字体的问题，不该默认把流水线判红。
+   - **finding 粒度**：每个码位一条；`primary_key = "U+%04X"`（大写、至少 4 位）；
+     多码位时按码位升序（`canonical.sort_findings` 的 `primary_key` 字符串序与之相容）。
+     证据键固定为 `{"codepoint", "block", "source_covered", "subset_covered"}`。
+   - **glyph0 命中不计入覆盖**：映射到 `.notdef`（`cmapset.NOTDEF_NAMES`）的码位视为缺。
+   - **单字体模式**（未给 `--subset`）：`T` 不参与 → `LOST_IN_SUBSET = ∅`，`OK = R0 ∩ S`，
+     `MISSING_IN_SOURCE = R0 \ S`（级别同上）；`summary.coverage.LOST_IN_SUBSET` 为空列表。
+
+   **2.1 组合字符闭包（NFC/NFD）** —— 范围 / 方向 / `added` 定义
+
+   | 项 | 口径 |
+   |---|---|
+   | 范围 | 只对 `R0` 里的**单个码位**各自做规范化；不做整段文本的上下文规范化（不做 Hangul 组合串、不做 shaping） |
+   | 方向 | **双向**：`NFD`（分解）与 `NFC`（合成）各取一次，结果里的**每个字符**都并入闭包集 `C`（含原码位自身） |
+   | 深度 | **单层**：对新增码位不再递归展开 |
+   | `added` | `added = C \ R0`，码位升序；`closed = C` |
+   | 计数落点 | `summary.closure = {"added": [...], "added_codepoints": n, "missing_in_source": m, "lost_in_subset": k}`；`missing_in_source = |added \ S|`、`lost_in_subset = |(added ∩ S) \ T|`（无 `--subset` 时恒 0） |
+   | 是否产 finding | **否**：闭包新增码位**只计数**，不产 `error`/`warn` —— 用户没要求的组合符不该把退出码判红；三分类仍只用 `R0` |
+
+   **2.2 回退链建议（`summary.fallback_hint`）** —— 纯建议，**不参与任何判定**：
+
+   | 项 | 口径 |
+   |---|---|
+   | 触发 | 仅当 `LOST_IN_SUBSET` 非空且给了 `--subset`；否则为空列表 `[]` |
+   | 分组 | 按 §六.4 的 `block_of`（互斥分区）归组被丢码位 |
+   | 每项字段 | `{"block": 块名, "lost": 该块被丢码位数, "subset_available_in_block": 产物在该块里**真实覆盖**的码位数}` |
+   | 排序 | 按 `block` 名字符串升序（确定性） |
+   | 禁止 | **不得**据此改级别、加 finding、或推断"换个子集就好了"——它只是"该块里产物还有多少可提供的字" |
+
+3. **cmap 编码优先级**：`(3,10) → (0,4) → (3,1) → (0,3)`；多个同优先级子表同时存在时取并集，
+   并在报告里列各子表的项数（`summary.cmap.*_chosen` = `[platform, encoding, format, count]` 列表，
+   `summary.cmap.*_subtables` 同理，含未被选中的子表）。
+
+   **取不到 Unicode cmap 的失败路径（两条理由不得合并）**：
+
+   | 情形 | 输出 | 退出码 | 报告里**不得**出现 |
+   |---|---|---|---|
+   | 根本没有 `cmap` 表 | `SKIPPED(reason=no_cmap_table)` | 0 | 任何三分类结论（尤其"覆盖为空 = OK"） |
+   | 有 cmap 表但没有 Unicode 子表（如仅 `(1,0)`/format 0） | `SKIPPED(reason=no_unicode_cmap)` | 0 | 同上 |
+   | 给了 `--subset` 但**产物**取不到 Unicode cmap | 同上两条理由之一，`detail` 以 `subset:` 开头 | 0 | 同上（整份报告不产三分类，而不是只算源侧） |
+
+   两条理由的 `detail` 以 `source:` / `subset:` 开头，指明是哪一侧；**任一输入取不到 Unicode cmap
+   → `summary` 为空**（不猜、不给半份结论）。
+4. **分区计数**：**互斥分区，按此优先级判定**（先命中者胜）——
+   `ExtA` = `U+3400–U+4DBF` → `ExtB+` = `U+20000–U+2FA1F` → `BMP` = 其余 `U+0000–U+FFFF` → `other`。
+   **ExtA 必须先于 BMP 判**：Ext A 的码位本身就落在 `U+0000–U+FFFF` 内，若先判 BMP 则 ExtA 永远为 0
+   （M3 实现时实测踩到，`U+3400` 曾被算进 BMP）。四块之和恒等于码位总数。
 5. **布局三元组**：`(ScriptTag, LangSysTag|"dflt"|"all", FeatureTag)`；`"all"` 表示该 feature 在所有 langsys 中出现。查找表计数：`计数(LookupType 7) = Σ 解包 ExtSubTable 后的子表`；朴素遍历结果单独记为 `naive`（**只用于对照，不作结论**）。
 6. **退出码**：`0` 通过；`1` 有发现（`error` 级 finding）；`2` 输入非法（文件不可读 / 非字体 / 缺必需参数 / JSON 反序列化失败）。`SKIPPED(reason=...)` 恒为**不影响退出码**的 `note`。
 7. **fixture 名表**：`F1 fstype-nosubset`（0x0108）、`F2 fstype-multibit-v0`（0x000E + v0，**反例守护**）、`F3 fstype-multibit-v3`（0x000E + v3）、`F4 silent-drop`、`F5 metadata-stripped`、`F6 codepage-mismatch`。

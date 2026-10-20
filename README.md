@@ -5,7 +5,7 @@
 **审的是产物，不是字体项目。** 输入 = 原字体 + 子集字体 + 必须支持的字符集；
 输出 = 子集是否真覆盖、GSUB/GPOS 是否被弄坏、许可是否允许子集、元数据是否被剥掉。
 
-- **版本**：v0.1.0.dev0（M2 许可闸门完成；覆盖/布局/元数据判定待 M3–M5）
+- **版本**：v0.1.0.dev0（M3 覆盖差集完成；布局/元数据判定待 M4–M5）
 - **交付形态**：纯本地 **Python CLI**（零网络、零模型、零商用字体）
 - **运行期依赖**：`fonttools`（唯一）｜**Python** ≥ 3.8
 
@@ -35,21 +35,21 @@ py -m venv .venv
 > **前置条件**：`pip install -e .` 需要 pip ≥ 21.3（PEP 660）。Python 3.8 的 `venv` 自带
 > pip 20.2.3，**不先升级会报** `editable mode currently requires a setup.py based build`。
 
-## 现状（M2 许可闸门完成）
+## 现状（M3 覆盖差集完成）
 
 | 里程碑 | 内容 | 状态 |
 |---|---|---|
 | M0 | 方法论装订 + 计划套件 + 可运行骨架 | ✅ |
 | M1 | 数据先行：F1–F6 fixture 生成器 + `fonts.lock` | ✅ |
 | M2 | `license-gate` 许可闸门（`OS/2.version` 分流） | ✅ |
-| M3 | `coverage-diff` 覆盖差集（三分类 + 回退链） | ⬜ |
+| M3 | `coverage-diff` 覆盖差集（三分类 + 回退链） | ✅ |
 | M4 | `layout-survival` 布局保真（Type 7 解包） | ⬜ |
 | M5 | `metadata` + `report`（cmap↔OS/2 交叉一致性） | ⬜ |
 | M6 | 发布：GitHub 公开仓库 v0.1.0 | ⬜ |
 
-> 状态语义：`✅` 已完成、`⬜` 未开始。**`license-gate` 已产出真实判定**（五元结论 + 六条违规码，
-> 每条带 `spec_ref`）；其余四个子命令仍输出 `SKIPPED(reason=module_not_implemented_in_m0)` ——
-> 这是**显式跳过**，不是静默通过。
+> 状态语义：`✅` 已完成、`⬜` 未开始。**`license-gate` 与 `coverage-diff` 已产出真实判定**；
+> `layout-survival` / `metadata` / `report` 的判定部分仍输出 `SKIPPED(reason=module_not_implemented_in_m0)`
+> —— 这是**显式跳过**，不是静默通过。
 
 ### `license-gate` 输出形状
 
@@ -73,10 +73,36 @@ py -m venv .venv
 （有测试解析该表做对账，改一边不改另一边必红）。`may_modify` 只回答"`fsType` 是否禁止文档/产物被编辑"，
 **不回答**"是否授予修改字体软件本身的权利"。
 
+### `coverage-diff` 输出形状
+
+```json
+"summary": {
+  "required": { "count": 5, "blocks": { "BMP": 5, "ExtA": 0, "ExtB+": 0, "other": 0 } },
+  "coverage": {
+    "OK": ["U+0061", "U+0062", "U+0063"],
+    "MISSING_IN_SOURCE": [],
+    "LOST_IN_SUBSET": ["U+5B57", "U+6C49"],
+    "counts": { "OK": 3, "MISSING_IN_SOURCE": 0, "LOST_IN_SUBSET": 2 },
+    "blocks": { "OK": { "BMP": 3, "ExtA": 0, "ExtB+": 0, "other": 0 }, "...": "..." }
+  },
+  "closure": { "added": [], "added_codepoints": 0, "missing_in_source": 0, "lost_in_subset": 0 },
+  "fallback_hint": [ { "block": "BMP", "lost": 2, "subset_available_in_block": 3 } ],
+  "cmap": { "source_chosen": [[3, 1, 4, 5]], "source_subtables": [[0, 3, 4, 5], [3, 1, 4, 5]] },
+  "strict_source": false, "subset_present": true
+}
+```
+
+- 判定式、级别与 `spec_ref` 的唯一来源是 `data/README.md` §六.2；闭包口径 §六.2.1；编码优先级与失败路径
+  §六.3；分区计数 §六.4（**互斥分区，ExtA 先于 BMP 判**）。
+- **`--strict-source`** 只把 `MISSING_IN_SOURCE` 由默认 `warn` 提到 `error`（默认不判红：原文缺字是
+  语料/源字体的问题，本工具审的是产物）。
+- **取不到 Unicode cmap**（无 cmap 表 / 仅有 `(1,0)`）→ `SKIPPED(reason=no_cmap_table|no_unicode_cmap)`，
+  `summary` 为空、退出码 0：**不会**给出"覆盖为空 = 通过"的假结论。
+
 ## 三个场景（最小复现命令）
 
-> 以下命令中，`license-gate` 已产出真实判定（M2）；`coverage-diff` / `layout-survival` / `metadata`
-> 在 M3–M5 落地前退出码已正确、输出里带 `SKIPPED`。
+> 以下命令中，`license-gate`（M2）与 `coverage-diff`（M3）已产出真实判定；
+> `layout-survival` / `metadata` 在 M4–M5 落地前退出码已正确、输出里带 `SKIPPED`。
 > 未标注 `<...>` 的参数都是真实路径；尖括号是占位符，请替换。
 
 ### 场景一：许可闸门（能不能嵌、能不能子集）
@@ -106,7 +132,7 @@ subsetaudit report --source <source.ttf> --subset <subset.ttf> --text "abc" --fo
 | 码 | 语义 |
 |---|---|
 | 0 | 通过（`warn` / `note` / `SKIPPED` 不影响） |
-| 1 | 有发现（至少一条 `error` 级 finding） |
+| 1 | 有发现（至少一条 `error` 级 finding，如 `LOST_IN_SUBSET`、`FSTYPE_*`；`coverage-diff` 默认的 `MISSING_IN_SOURCE` 是 `warn`，加 `--strict-source` 才到 1） |
 | 2 | 输入非法（文件不可读 / 非字体 / 缺必需参数 / 语料不可读） |
 
 ## 字段说明（规范 JSON）

@@ -30,7 +30,7 @@
 | tools/fetch_fonts.py | OFL 字体锁文件校验（默认离线 `--check`）/ 下载（`--download`） | ✅ v1（M1） |
 | data/fonts.lock | 3 个 OFL 字体的 URL + 字节数 + sha256（二进制不入仓） | ✅ v1（M1） |
 | data/fixtures/ | F1–F6 的 `expect.json` + `README.md` + `manifest.json`（产物 gitignore） | ✅ v1（M1） |
-| src/subsetaudit/ | 五子命令 + 共享层（sfnt / cmapset / canonical）；`license_gate` 已实现判定 | ✅ v1（M2，其余判定待 M3–M5） |
+| src/subsetaudit/ | 五子命令 + 共享层（sfnt / cmapset / canonical）；`license_gate` / `coverage_diff` 已实现判定 | ✅ v1（M3，其余判定待 M4–M5） |
 | plan/HANDOFF-M*.md | 各里程碑交接快照 | ⏳ 随里程碑 |
 | plan/RELEASE-M6.md | 发布留档（tag 时点事实 / tag 后追加事实分栏） | ⏳ M6 |
 
@@ -79,13 +79,13 @@
 | 需求原话（逐条 URL + 状态） | plan/01 §一 | ✅ 8 条元数据核对；#7 来源不可定位（降级）、#8 状态更正为 closed |
 | 开源空白三行（禁写首创） | plan/01 §六 | ✅ 措辞为"生成器红海、校验器真空"并标 ⬜ 软论据 |
 | M1 `license-gate`（版本分流 + 三类闸门） | plan/01 §三 M1 | ✅ 含 5 条验收；**M2 里程碑已实现**（五元结论口径入 §六.1.3） |
-| M2 `coverage-diff`（三分类 + 编码优先级 + 回退链） | plan/01 §三 M2 | ✅ 含 3 条验收 |
+| M2 `coverage-diff`（三分类 + 编码优先级 + 回退链） | plan/01 §三 M2 | ✅ 含 3 条验收；**M3 里程碑已实现**（三分类/闭包/分块口径入 §六.2–§六.4） |
 | M3 `layout-survival`（LookupType 7 解包） | plan/01 §三 M3 | ✅ 含 3 条验收（含 784 vs 0 对照） |
 | M4 `metadata`（cmap↔OS/2 一致性） | plan/01 §三 M4 | ✅ 含 4 条验收（**已按实测更正**） |
 | M5 `report`（JSON + 退出码 0/1/2） | plan/01 §三 M5 | ✅ 含 4 条验收 |
 | 扩展项明确不设（可变字体轴/STAT） | plan/01 §三扩展项表 + §七 | ✅ 附 fontbakery 11+ 项名称 |
 | 6 类合成破损 fixture | plan/01 §四 3、data §六 7 | ✅ F1–F6 命名与口径已定 |
-| 数值口径一处定义 | data §六 | ✅ 8 条口径（M2 起 §六.1 含五元结论判定式 + 六条违规码 + `spec_ref` 字面量） |
+| 数值口径一处定义 | data §六 | ✅ 8 条口径（§六.1 五元结论判定式 + 六条违规码 + `spec_ref` 字面量；§六.2 三分类级别 + §六.2.1 闭包；§六.3 两条失败路径；§六.4 互斥分区优先级） |
 | 560 字体分布 + 不可外推声明 | data §五 | ✅ 只读实测 + 声明 |
 | 未核实项与更正记录 | data §七、§九 | ✅ 9 条更正 + 6 条未核实 |
 
@@ -96,7 +96,7 @@
 | **M0 装订与骨架** | `AGENTS.md` + 两道门 + `plan/00–06` + 可运行五子命令骨架 | `py tools/check_sprint_layout.py` 全绿（16 组变异已验证）；`subsetaudit --help` 与五子命令可跑；`pip install -e .` 可用 | ✅ |
 | **M1 数据先行** | 6 类合成破损 fixture（F1–F6）+ OFL 字体回归套件 | `tools/gen_fixtures.py` 可重建全部 fixture；`tools/fetch_fonts.py --check` 校验 `fonts.lock` 哈希；每条 fixture 有 `expect.json` 与说明；**生成期自证**（用独立 oracle 复算计数与分类，不符即失败）；仓库内无任何字体二进制 | ✅ |
 | **M2 许可闸门** | `license-gate` | `0x000E`+v0 不误报、`0x0108` 判禁子集、v3 多位并存必报；每条结论带规范条款引用；F1/F2/F3 golden 逐项一致 | ✅ |
-| **M3 覆盖差集** | `coverage-diff` | 复现 `--text="汉字abc"` 静默丢字并判 `LOST_IN_SUBSET`；pdfcraft#381 字组"高频在、中频缺"指纹可复现；非 Unicode cmap 走 `SKIPPED`；F4 golden 一致 | ⬜ |
+| **M3 覆盖差集** | `coverage-diff` | 复现 `--text="汉字abc"` 静默丢字并判 `LOST_IN_SUBSET`；pdfcraft#381 字组"高频在、中频缺"指纹可复现；非 Unicode cmap 走 `SKIPPED`；F4 golden 一致 | ✅ |
 | **M4 布局保真** | `layout-survival` | Type 7 解包后规则数正确（朴素遍历作对照）；默认丢弃标签被列出；`uniFB01 → glyph00003` 改名被认出 | ⬜ |
 | **M5 元数据与报告** | `metadata` + `report` | msyh 码页矛盾被抓住而 `ulUnicodeRange1=0` **不**误报（以 OFL 同构样本复现）；F5/F6 golden 一致；退出码 0/1/2 三档 fixture；报告逐字节确定 | ⬜ |
 | **M6 发布** | GitHub **公开仓库** v0.1.0 | **DoD = git tag + GitHub Release 附产物 + 发布留档三件套**（`plan/RELEASE-M6.md` 记 tag 时点事实与 tag 后追加事实）；干净环境 `pip install -e .` 后五子命令可用；`LICENSE`（MIT）与 `pyproject.toml` license 字段一致 | ⬜ |

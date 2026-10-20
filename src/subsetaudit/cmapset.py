@@ -49,12 +49,16 @@ def classify(required, source, subset):
 
 
 def block_of(cp):
-    if cp <= BMP_MAX:
-        return "BMP"
+    """分区归属（§六.4）：**ExtA 优先于 BMP** —— CJK Ext A 的码位本身落在 `U+3400–U+4DBF`，
+    若先判 `cp <= 0xFFFF` 就永远归不到 ExtA（本项目 M3 实测踩到：`0x3400` 曾被判成 BMP）。
+    分区互斥，优先级 = `ExtA → ExtB+ → BMP → other`。
+    """
     if EXTA_LO <= cp <= EXTA_HI:
         return "ExtA"
     if EXTB_LO <= cp <= EXTB_HI:
         return "ExtB+"
+    if 0 <= cp <= BMP_MAX:
+        return "BMP"
     return "other"
 
 

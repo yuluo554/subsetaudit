@@ -140,9 +140,14 @@ def test_all_five_subcommands_exit_zero(simple_font, corpus_file, capsys):
         assert r.code == cli.EXIT_OK, "%r -> %s %s" % (argv, r.code, r.out)
         body = r.json()
         assert body["inputs"].get("source") is None or not os.path.isabs(body["inputs"]["source"])
-    # 骨架未实现的模块仍必须把 SKIPPED 显式写进输出；`license-gate` 已实现（M2），
-    # 它的"无结论"不再以 SKIPPED 表达，所以单独判（见 test_license_gate_real_verdict_exits_zero）。
-    for argv in cases[1:]:
+    # 仍是骨架的模块必须把 SKIPPED 显式写进输出。`license-gate`（M2）与 `coverage-diff`（M3）
+    # 已出真实结论，它们的"不再跳过"另由反向断言判（见下方两条 `*_is_no_longer_a_skeleton`）。
+    still_skeleton = [
+        ["layout-survival", simple_font, simple_font],
+        ["metadata", simple_font],
+        ["metadata", simple_font, "--source", simple_font],
+    ]
+    for argv in still_skeleton:
         r = run(argv, capsys)
         assert r.json()["skipped"], "未实现的模块必须把 SKIPPED 显式写进输出: %r" % (argv,)
 
@@ -271,10 +276,10 @@ def test_console_script_entry_point_matches_cli_main():
 def test_skeleton_modules_do_not_fabricate_findings():
     """未实现的模块只准返回 SKIPPED，不得返回任何 finding。
 
-    **M2 起 `license_gate` 已实现判定**，从本判据的断言面里移除（它的"不伪造"由
-    `tests/test_license_gate.py` 的 golden 逐项承担）；其余三个模块仍是骨架。
+    **M2 起 `license_gate`、M3 起 `coverage_diff` 已实现判定**，从本判据的断言面里移除
+    （它们的"不伪造"由各自测试文件的 golden 逐项承担）；其余两个模块仍是骨架。
     """
-    for name in ("coverage_diff", "layout_survival", "metadata"):
+    for name in ("layout_survival", "metadata"):
         mod = __import__("subsetaudit.%s" % name, fromlist=[name])
         text = io.open(mod.__file__, "r", encoding="utf-8").read() if hasattr(mod, "__file__") else ""
         assert "skeleton_result(" in text, "%s 未走骨架出口" % name
@@ -285,6 +290,14 @@ def test_license_gate_is_no_longer_a_skeleton():
     """M2 已实现：`license_gate` 不再走骨架出口（反向判据，防"翻完 ✅ 又退回骨架"）。"""
     from subsetaudit import license_gate
     text = io.open(license_gate.__file__, "r", encoding="utf-8").read()
+    assert "skeleton_result(" not in text
+    assert "module_not_implemented_in_m0" not in text
+
+
+def test_coverage_diff_is_no_longer_a_skeleton():
+    """M3 已实现：`coverage_diff` 不再走骨架出口（反向判据，防"翻完 ✅ 又退回骨架"）。"""
+    from subsetaudit import coverage_diff
+    text = io.open(coverage_diff.__file__, "r", encoding="utf-8").read()
     assert "skeleton_result(" not in text
     assert "module_not_implemented_in_m0" not in text
 
