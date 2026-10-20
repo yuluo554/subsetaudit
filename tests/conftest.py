@@ -87,6 +87,117 @@ def _make_mac_only(font):
     font["cmap"].tables = [mac]
 
 
+# ── 布局样本（M4）：测试内合成，**不依赖任何商用字体**（data/README §四.1 #14） ──
+LAYOUT_GLYPH_ORDER = (
+    ".notdef", "f", "i", "uniFB01", "a", "b", "a.alt", "zero.slash", "one",
+)
+LAYOUT_CMAP = {0x66: "f", 0x69: "i", 0x61: "a", 0x62: "b", 0x30: "zero.slash", 0x31: "one"}
+LAYOUT_FEA = u"""
+feature liga { sub f i by uniFB01; } liga;
+feature ss01 { sub a by a.alt; } ss01;
+feature zero { sub zero.slash by one; } zero;
+"""
+
+
+def build_layout_font(path, wrap_gsub_ext=(), wrap_gpos_ext=False):
+    """合成带 GSUB（liga/ss01/zero）的极小 TTF；可选把指定 feature 的 lookup 包成 Extension。
+
+    ``wrap_gsub_ext`` = 需要包成 GSUB **Type 7** 的 feature 标签（如 ``("liga", "ss01")``）；
+    ``wrap_gpos_ext`` = 是否把 ``kern`` 的 GPOS lookup 包成 **Type 9**。
+
+    这两个参数是 M4 的对照锚点（`data/README.md` §六.5.2 / §四.1 #13–#14）：
+      · 包了 Type 7/9 之后，**朴素遍历看到 0 条**、解包后看到真子表；
+      · 不包时两者相等 —— 用来证明"解包这一层是承重的"，而不是恒等变换。
+    """
+    from fontTools.feaLib.builder import addOpenTypeFeaturesFromString
+    from fontTools.ttLib.tables import otTables as OT
+
+    glyph_order = list(LAYOUT_GLYPH_ORDER)
+    fb = FontBuilder(1000, isTTF=True)
+    fb.setupGlyphOrder(glyph_order)
+    fb.setupCharacterMap(dict(LAYOUT_CMAP))
+    fb.setupGlyf(dict((name, _glyph(None)) for name in glyph_order))
+    fb.setupHorizontalMetrics(dict((name, (600, 0)) for name in glyph_order))
+    fb.setupHorizontalHeader(ascent=800, descent=-200)
+    fb.setupNameTable({
+        "familyName": "SubsetAuditLayoutFixture",
+        "styleName": "Regular",
+        "copyright": "Synthetic fixture",
+        "licenseDescription": "Synthetic OFL-like fixture",
+        "licenseInfoURL": "https://example.invalid/license",
+    })
+    fb.setupOS2(sTypoAscender=800, sTypoDescender=-200, usWinAscent=800, usWinDescent=200)
+    fb.setupPost()
+    addOpenTypeFeaturesFromString(fb.font, LAYOUT_FEA + u"\nfeature kern { pos f i -10; } kern;\n")
+    font = fb.font
+
+    _wrap_extension(font, "GSUB", wrap_gsub_ext, OT.ExtensionSubst)
+    if wrap_gpos_ext:
+        _wrap_extension(font, "GPOS", ("kern",), OT.ExtensionPos)
+
+    font.save(path)
+    font.close()
+    return path
+
+
+def _wrap_extension(font, tag, feature_tags, extension_class):
+    """把指定 feature 引用的 lookup 就地包成 Extension（GSUB Type 7 / GPOS Type 9）。"""
+    table = font[tag].table
+    targets = set()
+    for record in table.FeatureList.FeatureRecord:
+        if record.FeatureTag in feature_tags:
+            targets.update(int(i) for i in (record.Feature.LookupListIndex or []))
+    for index in sorted(targets):
+        lookup = table.LookupList.Lookup[index]
+        if int(lookup.LookupType) in (7, 9):
+            continue  # 已经是 Extension，不重复包
+        inner = lookup.SubTable[0]
+        extension = extension_class()
+        extension.Format = 1
+        extension.ExtensionLookupType = int(lookup.LookupType)
+        extension.ExtSubTable = inner
+        lookup.LookupType = 7 if tag == "GSUB" else 9
+        lookup.SubTable = [extension]
+
+
+def subset_layout_font(src, dst, unicodes, layout_features=None):
+    """用 ``fontTools.subset`` 产出子集（与 `pyftsubset` 默认行为对齐）。"""
+    from fontTools import subset
+    from fontTools.ttLib import TTFont
+
+    options = subset.Options()
+    if layout_features is not None:
+        options.layout_features = list(layout_features)
+    font = TTFont(src, recalcTimestamp=False)
+    subsetter = subset.Subsetter(options=options)
+    subsetter.populate(unicodes=sorted(unicodes))
+    subsetter.subset(font)
+    font.save(dst)
+    font.close()
+    return dst
+
+
+@pytest.fixture()
+def layout_font(tmp_path):
+    """GSUB 无 Extension：liga/ss01/zero 三条 feature，`naive == raw`。"""
+    return build_layout_font(str(tmp_path / "layout-plain.ttf"))
+
+
+@pytest.fixture()
+def layout_font_ext(tmp_path):
+    """GSUB 的 liga/ss01 包成 **Type 7**，GPOS 的 kern 包成 **Type 9**。"""
+    return build_layout_font(str(tmp_path / "layout-ext.ttf"),
+                             wrap_gsub_ext=("liga", "ss01"), wrap_gpos_ext=True)
+
+
+@pytest.fixture()
+def no_layout_font(tmp_path):
+    """完全没有 GSUB/GPOS（走 `SKIPPED(reason=no_layout_tables)`）。"""
+    path = str(tmp_path / "no-layout.ttf")
+    build_font(path, cmap={0x61: "a", 0x62: "b"})
+    return path
+
+
 @pytest.fixture()
 def simple_font(tmp_path):
     """含 ``a b c`` 的最小字体。"""

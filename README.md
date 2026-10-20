@@ -5,7 +5,7 @@
 **审的是产物，不是字体项目。** 输入 = 原字体 + 子集字体 + 必须支持的字符集；
 输出 = 子集是否真覆盖、GSUB/GPOS 是否被弄坏、许可是否允许子集、元数据是否被剥掉。
 
-- **版本**：v0.1.0.dev0（M3 覆盖差集完成；布局/元数据判定待 M4–M5）
+- **版本**：v0.1.0.dev0（M4 布局保真完成；元数据/报告判定待 M5）
 - **交付形态**：纯本地 **Python CLI**（零网络、零模型、零商用字体）
 - **运行期依赖**：`fonttools`（唯一）｜**Python** ≥ 3.8
 
@@ -35,7 +35,7 @@ py -m venv .venv
 > **前置条件**：`pip install -e .` 需要 pip ≥ 21.3（PEP 660）。Python 3.8 的 `venv` 自带
 > pip 20.2.3，**不先升级会报** `editable mode currently requires a setup.py based build`。
 
-## 现状（M3 覆盖差集完成）
+## 现状（M4 布局保真完成）
 
 | 里程碑 | 内容 | 状态 |
 |---|---|---|
@@ -43,13 +43,13 @@ py -m venv .venv
 | M1 | 数据先行：F1–F6 fixture 生成器 + `fonts.lock` | ✅ |
 | M2 | `license-gate` 许可闸门（`OS/2.version` 分流） | ✅ |
 | M3 | `coverage-diff` 覆盖差集（三分类 + 回退链） | ✅ |
-| M4 | `layout-survival` 布局保真（Type 7 解包） | ⬜ |
+| M4 | `layout-survival` 布局保真（Type 7/9 解包） | ✅ |
 | M5 | `metadata` + `report`（cmap↔OS/2 交叉一致性） | ⬜ |
 | M6 | 发布：GitHub 公开仓库 v0.1.0 | ⬜ |
 
-> 状态语义：`✅` 已完成、`⬜` 未开始。**`license-gate` 与 `coverage-diff` 已产出真实判定**；
-> `layout-survival` / `metadata` / `report` 的判定部分仍输出 `SKIPPED(reason=module_not_implemented_in_m0)`
-> —— 这是**显式跳过**，不是静默通过。
+> 状态语义：`✅` 已完成、`⬜` 未开始。**`license-gate`、`coverage-diff` 与 `layout-survival`
+> 已产出真实判定**；`metadata` / `report` 的判定部分仍输出
+> `SKIPPED(reason=module_not_implemented_in_m0)` —— 这是**显式跳过**，不是静默通过。
 
 ### `license-gate` 输出形状
 
@@ -99,10 +99,42 @@ py -m venv .venv
 - **取不到 Unicode cmap**（无 cmap 表 / 仅有 `(1,0)`）→ `SKIPPED(reason=no_cmap_table|no_unicode_cmap)`，
   `summary` 为空、退出码 0：**不会**给出"覆盖为空 = 通过"的假结论。
 
+### `layout-survival` 输出形状
+
+```json
+"summary": {
+  "layout": {
+    "spec_ref": "data/README §6.5",
+    "ligature_scope": "all",
+    "source": {
+      "gsub": { "present": true, "lookups": 15, "subtables_raw": 15, "subtables_naive": 15,
+                "extension_lookups": 0, "subtable_types": { "1": 11, "3": 1, "4": 3 },
+                "ligature_rules_raw": 340, "ligature_rules_naive": 340, "feature_variations": 0 },
+      "gpos": { "present": true, "...": "..." },
+      "triples": { "GSUB": { "present": true, "count": 198 }, "GPOS": { "present": true, "count": 136 } }
+    },
+    "subset": { "gsub": { "...": "..." }, "gpos": { "...": "..." }, "triples": { "...": "..." } },
+    "lost": { "triples": 310, "ligature_rules": 333, "ligature_renamed": 0 }
+  }
+}
+```
+
+- 三元组、判定式与 `spec_ref` 的唯一来源是 `data/README.md` §六.5（枚举规则 5.1 / 扩展解包 5.2 /
+  判定式 5.3 / 连字规则 5.4 / 失败路径 5.5 / 落地约束 5.6）。
+- **`LookupType 7`（GSUB）与 `LookupType 9`（GPOS）都解包** —— 只解 7 会让 GPOS 整段读不到
+  （商用字体只读观察：Arial 134 个 GPOS lookup 全为 Type 9）。
+- `subtables_naive` / `ligature_rules_naive` 是**不展开 Extension** 时可见的计数，**只作对照、不作结论**；
+  三个 OFL 字体没有 Extension → `naive == raw`。
+- 连字规则按**输入码位序列**比对（子集后字形名会变成 `glyph00003` 这类占位名，不可比）：
+  规则消失 → `LAYOUT_LIGATURE_LOST`（`error`）；规则仍在但目标字形失去稳定名字 →
+  `LAYOUT_LIGATURE_RENAMED`（`warn`，退出码不变）。
+- 两侧都没有 `GSUB`/`GPOS` → `SKIPPED(reason=no_layout_tables)`、`summary` 为空、退出码 0；
+  只有一侧有 → 照常判定 + `SKIPPED(reason=layout_tables_missing_on_one_side)`（**不整份放弃**）。
+
 ## 三个场景（最小复现命令）
 
-> 以下命令中，`license-gate`（M2）与 `coverage-diff`（M3）已产出真实判定；
-> `layout-survival` / `metadata` 在 M4–M5 落地前退出码已正确、输出里带 `SKIPPED`。
+> 以下命令中，`license-gate`（M2）、`coverage-diff`（M3）与 `layout-survival`（M4）已产出真实判定；
+> `metadata` 在 M5 落地前退出码已正确、输出里带 `SKIPPED`。
 > 未标注 `<...>` 的参数都是真实路径；尖括号是占位符，请替换。
 
 ### 场景一：许可闸门（能不能嵌、能不能子集）
@@ -132,7 +164,7 @@ subsetaudit report --source <source.ttf> --subset <subset.ttf> --text "abc" --fo
 | 码 | 语义 |
 |---|---|
 | 0 | 通过（`warn` / `note` / `SKIPPED` 不影响） |
-| 1 | 有发现（至少一条 `error` 级 finding，如 `LOST_IN_SUBSET`、`FSTYPE_*`；`coverage-diff` 默认的 `MISSING_IN_SOURCE` 是 `warn`，加 `--strict-source` 才到 1） |
+| 1 | 有发现（至少一条 `error` 级 finding，如 `LOST_IN_SUBSET`、`FSTYPE_*`、`LAYOUT_FEATURE_LOST`、`LAYOUT_LIGATURE_LOST`；`coverage-diff` 默认的 `MISSING_IN_SOURCE` 是 `warn`，加 `--strict-source` 才到 1；`LAYOUT_LIGATURE_RENAMED` 也只是 `warn`） |
 | 2 | 输入非法（文件不可读 / 非字体 / 缺必需参数 / 语料不可读） |
 
 ## 字段说明（规范 JSON）

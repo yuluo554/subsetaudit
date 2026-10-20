@@ -27,8 +27,10 @@ from fontTools.pens.ttGlyphPen import TTGlyphPen  # noqa: E402
 CASES = []
 
 
-def _synthetic_font(path, cmap, fs_type=0x0000):
+def _synthetic_font(path, cmap, fs_type=0x0000, with_layout=False):
     glyphs = [".notdef"] + sorted(set(cmap.values()))
+    if with_layout and "uniFB01" not in glyphs:
+        glyphs.append("uniFB01")
     fb = FontBuilder(1000, isTTF=True)
     fb.setupGlyphOrder(glyphs)
     fb.setupCharacterMap(cmap)
@@ -42,8 +44,32 @@ def _synthetic_font(path, cmap, fs_type=0x0000):
     fb.setupOS2(sTypoAscender=800, sTypoDescender=-200)
     fb.font["OS/2"].fsType = fs_type
     fb.setupPost()
+    if with_layout:
+        # 有 GSUB 才能走到 M4 的**真实判定**分支（否则只走 SKIPPED）。
+        # 合成 `liga` + `ss01`：默认白名单只留 liga → 产物上 `ss01` 会被报丢失。
+        from fontTools.feaLib.builder import addOpenTypeFeaturesFromString
+        addOpenTypeFeaturesFromString(fb.font, u"""
+feature liga { sub a b by uniFB01; } liga;
+feature ss01 { sub a by b; } ss01;
+""")
     fb.save(path)
     return path
+
+
+def _subset(src, dst, unicodes):
+    """用 fontTools.subset 产出一个子集（冒烟用；只落临时目录）。"""
+    sys.path.insert(0, os.path.join(ROOT, "src"))
+    from fontTools import subset
+    from fontTools.ttLib import TTFont
+
+    options = subset.Options()
+    font = TTFont(src, recalcTimestamp=False)
+    subsetter = subset.Subsetter(options=options)
+    subsetter.populate(unicodes=sorted(unicodes))
+    subsetter.subset(font)
+    font.save(dst)
+    font.close()
+    return dst
 
 
 def _run(argv):
@@ -63,6 +89,10 @@ def main(argv):
     failures = []
     try:
         font = _synthetic_font(os.path.join(tmp, "smoke.ttf"), {0x61: "a", 0x62: "b", 0x63: "c"})
+        # 带 GSUB 的样本：让 `layout-survival` 走到**真实判定**分支（否则只走 SKIPPED）。
+        layout_font = _synthetic_font(os.path.join(tmp, "layout.ttf"),
+                                      {0x61: "a", 0x62: "b", 0x63: "c"}, with_layout=True)
+        layout_subset = _subset(layout_font, os.path.join(tmp, "layout.subset.ttf"), [0x61, 0x62])
         corpus = os.path.join(tmp, "corpus.txt")
         with io.open(corpus, "w", encoding="utf-8", newline="\n") as fh:
             fh.write("abc\n")
@@ -73,7 +103,10 @@ def main(argv):
             (["license-gate", font, "--markdown"], 0),
             (["coverage-diff", font, "--text", "abc"], 0),
             (["coverage-diff", font, "--corpus", corpus, "--subset", font], 0),
+            # 无布局表 → SKIPPED 分支（退出码 0）
             (["layout-survival", font, font], 0),
+            # 有 GSUB 且产物丢了 `ss01` → 真实判定，退出码 1（有 error 级 finding）
+            (["layout-survival", layout_font, layout_subset], 1),
             (["metadata", font], 0),
             (["metadata", font, "--source", font], 0),
             (["report", "--source", font, "--subset", font, "--text", "abc"], 0),

@@ -119,6 +119,9 @@
 | 9 | 确定性（禁时钟） | `FontBuilder` 默认把 `head.created/modified` 设为**当前时钟**（实测：间隔 1.2 s 两次生成 → 字节不同）；`subset` 的 `TTFont.save` 默认 `recalcTimestamp=True` 会再改一次 | 实测对照：钉死 `FIXED_EPOCH = 3155673600` 后两次生成逐字节一致 |
 | 10 | 五元结论（M2） | F1/F2/F3 各五条结论与 §六.1.3 的判定式逐项一致：F1 `{pdf:T, app:F, web:F, subset:F, modify:T}`；F2/F3 均为 `{T, F, T, T, T}`（**F2 与 F3 的五元结论完全相同**，差别只在违规条） | `tools/gen_fixtures.py::_oracle_conclusions` 独立复算（不复用被测实现）+ `tests/test_license_gate.py` 逐项 |
 | 11 | 违规码覆盖完备性 | `bits ∉ {0,2,4,8}` 的**全部**取值都被现有两条码覆盖：含 bit0 的由 `FSTYPE_BIT0_RESERVED` 抓；不含 bit0 的其 bits1–3 必 ≥2 位（`0x0006/0x000A/0x000C/0x000E`）→ v3+ 由互斥码抓、v0–v2 由"取最宽松"吸收 | §六.1.5 的可证推导；`tests/test_license_gate.py::test_permission_names_cover_exactly_the_four_legal_values` |
+| **12** | **三个 OFL 字体都没有 Extension lookup（GSUB 无 Type 7，GPOS 无 Type 9）** | GSUB：`NotoSansSC` 15 / `NotoSans-Bold` 46 / `InterVariable` 90 个 lookup，**Type 7 = 0**；GPOS：10 / 9 / 10 个 lookup，**Type 9 = 0**。故这 3 个字体上 `naive == raw`（见 §六.5.2） | `TTFont(lazy=True)` 只读遍历；`tests/test_layout_survival.py` 的真实字体回归 |
+| **13** | **商用字体的 Extension 只作只读观察**（Arial / Calibri，**不复制、不入库、不可复现**） | `arial.ttf` GSUB：**92 个 lookup 全为 Type 7**、解包后 **196** 个子表、连字规则 **naive=0 / 解包后=784**；GPOS：134 个 lookup **全为 Type 9**、332 子表。`calibri.ttf` GSUB：296 个 Type 7、538 子表、规则 **naive=0 / 解包后=10119**；GPOS：254 个 Type 9、560 子表 | 本机只读 `TTFont(lazy=True)` 一次遍历（`_scratch` 原型，不入仓）；**仓库内以合成字体同构复现**（表 14） |
+| **14** | **合成字体上 `naive=0 / 解包后=1` 可复现**（替代商用字体那组对照） | `_scratch/src_ext.ttf`（程序合成，3 lookup / 3 字形）：把 `liga` 与 `ss01` 两条 lookup 包成 Type 7 → GSUB 外层 `{7:2, 1:1}`、`ExtensionLookupType` 解包出 `{1:1, 4:1}`；连字规则 **naive = 0、解包后 = 1**；`layout_features='*'` 保留 2 条三元组、默认保留 1 条、`''` 保留 0 条 | `tests/test_layout_survival.py::test_naive_count_is_zero_only_when_extension_is_not_unwrapped` 等（测试内合成，落 `tmp_path`） |
 
 > **推论（写进 HANDOFF-M2）**：`expect.json` 的 `fonttools_version` 必须记录**铸造时的版本**（常量
 > `GOLDEN_FONTOOLS_VERSION`），不能写运行时版本 —— 否则 3.8（4.57.0）与 3.12（4.67.0）两条 CI 通道的
@@ -307,10 +310,110 @@
    `ExtA` = `U+3400–U+4DBF` → `ExtB+` = `U+20000–U+2FA1F` → `BMP` = 其余 `U+0000–U+FFFF` → `other`。
    **ExtA 必须先于 BMP 判**：Ext A 的码位本身就落在 `U+0000–U+FFFF` 内，若先判 BMP 则 ExtA 永远为 0
    （M3 实现时实测踩到，`U+3400` 曾被算进 BMP）。四块之和恒等于码位总数。
-5. **布局三元组**：`(ScriptTag, LangSysTag|"dflt"|"all", FeatureTag)`；`"all"` 表示该 feature 在所有 langsys 中出现。查找表计数：`计数(LookupType 7) = Σ 解包 ExtSubTable 后的子表`；朴素遍历结果单独记为 `naive`（**只用于对照，不作结论**）。
+5. **布局保真（`layout-survival`）** —— 本节是 `layout-survival` 的**唯一**判定来源；代码里
+   `SPEC_REF = "data/README §6.5"` 是逐字副本（有测试解析本节做对账）。
+   记号：源字体表 `T_src`、产物字体表 `T_out`（各自对 `GSUB` / `GPOS` 各取一次，**两表分开成条**）。
+
+   **5.1 三元组枚举规则（`LangSysTag` 的三种取值与去重）**
+
+   | 项 | 口径 |
+   |---|---|
+   | 三元组形状 | `(TableTag, ScriptTag, LangSysTag, FeatureTag)`；`TableTag ∈ {GSUB, GPOS}` —— **GSUB 与 GPOS 必须分开成条**（同一 Script/LangSys/Feature 在两张表里是两条不同的事实，不得合并） |
+   | `LangSysTag` 取值 | ① `Script.DefaultLangSys` 非空 → 记一条 `"dflt"`；② `Script.LangSysRecord` 的每条 `LangSysTag` **原样**（4 字符，含尾部空格，如 `"ZHS "`）；③ 某 feature 在该 script 下的**全部** langsys（含 `dflt`）都出现时，额外记一条 `"all"` |
+   | `"all"` 与具体标签的关系 | `"all"` 是**附加**的聚合条，**不替代**具体标签：该 feature 同时在 `(script,"dflt",feat)` 等具体条目上存在。故 `"all"` 条数 = 该 script 下"全 langsys 共有的 feature"个数 |
+   | 去重 | 按四元组精确去重（同一 feature 被多个 `FeatureIndex` 指向同一 `FeatureTag` 时只记一条 —— 真实字体常见：`aalt` 在 NotoSansSC 有 11 条 FeatureRecord） |
+   | 空 Script | `ScriptList` 为空 → 该表不产三元组（不是"全部丢失"） |
+   | 排序 | `(TableTag, ScriptTag, LangSysTag, FeatureTag)` 字典序；`primary_key` 拼成 `"GSUB/hani/ZHS /liga"` 形态 |
+   | `FeatureVariations` | **不参与三元组枚举**。`FeatureVariationRecord` 的替代 FeatureTable 是"条件满足时换一套 lookup"的**运行时**分支，不是独立 feature；本工具只报 `summary.layout.*.feature_variations` 的**记录数**（源/产物各一），差异**不产 finding**（理由：无法只凭表结构判断该条件是否落在用户的使用域内） |
+
+   **5.2 子表计数（`raw` / `kept` / `naive`）与 LookupType 解包**
+
+   | 计数 | 定义 | 用途 |
+   |---|---|---|
+   | `subtables_raw` | **该侧**解包后的逻辑子表总数 = 每个 Extension 包装记**被包裹的真子表** 1 条 | 结论用 |
+   | `subtables_naive` | **该侧**不展开 Extension 时**可见**的子表数 = 只数非 Extension lookup 的 `SubTable`；**Extension 包装本身不计**（朴素遍历看不到里面的真子表，把它记成 1 会虚增） | **只作对照，不作结论** |
+   | `ligature_rules_raw` | **该侧**解包后 `LigatureSubst` 的**规则**总数 = `Σ Σ len(LigatureSet.Ligature)` | 结论用 |
+   | `ligature_rules_naive` | **该侧**不展开 Extension 时可见的 `LigatureSubst` 规则数（Extension 里的规则**一条都看不到**） | **只作对照** |
+   | `triples_kept` | **跨两侧**：源侧四元组里能在产物侧找到的个数 = `|T_src ∩ T_out|` | 结论用（"保住了多少"） |
+   | `triples_lost` | **跨两侧**：`|T_src \ T_out|` | 结论用（= `LAYOUT_FEATURE_LOST` 的条数） |
+
+   > **三个计数分开报**（`raw` / `kept` / `naive`）的口径：`raw` 与 `naive` 是**单侧**的结构量（`source.gsub.*` /
+   > `subset.gsub.*` 各自一份），`kept` 是**跨两侧**的结论量（`summary.layout.kept.triples`）。
+   > 三者的分母不同，**不得相除**当作"保留率"（`raw` 数子表、`kept` 数四元组）。
+
+   - **`LookupType 7`（GSUB Extension Substitution）** 与 **`LookupType 9`（GPOS Extension Positioning）**
+     都必须解包：外层 lookup 的 `SubTable` 是 `ExtensionSubst` / `ExtensionPos`，真子表在 `ExtSubTable`
+     字段里，真实类型写在 `ExtensionLookupType`。**只解 7 不解 9 是缺陷**（GPOS 侧会整段读不到）。
+   - `naive` 恒 ≤ `raw`；两者相等 ⇔ 该表没有 Extension（三个 OFL 字体即此情形，见 §四.1 #12）。
+   - 解包后按**真实类型**统计 **子表** 直方图 `subtable_type_histogram`（键 = 解包后真实类型号；
+     Extension 的键取 `ExtensionLookupType`），**不按外层号**统计。注意粒度是**子表**不是 lookup：
+     一个 lookup 可有多个子表（`NotoSans-Bold` GSUB 有 4 个 Type 6 lookup 共 6 个子表）。
+
+   **5.3 判定式（丢失 / 改名 / 全量丢失）**
+
+   | finding 码 | 判定式 | 级别 | `primary_key` | `spec_ref` |
+   |---|---|---|---|---|
+   | `LAYOUT_FEATURE_LOST` | `T_src \ T_out`（四元组差集） | 恒 `error` | `"<TABLE>/<script>/<langsys>/<feature>"` | `data/README §6.5` |
+   | `LAYOUT_LIGATURE_LOST` | 见 5.4 的规则差分 | 恒 `error` | `"<TABLE>/<script>/<langsys>/<feature>"`（规则归属的三元组） | `data/README §6.5` |
+   | `LAYOUT_LIGATURE_RENAMED` | 见 5.4 的"改名"分支 | 恒 `warn` | 同上 | `data/README §6.5` |
+
+   - **`LAYOUT_FEATURE_LOST` 的粒度**：每个四元组一条。若产物**整张表都没了**（`T_out` 无该表），
+     仍按源侧四元组逐条报 —— "全量丢失"就是差集的特例，**不另立码**（去重靠四元组集合）。
+   - **默认丢弃标签**不是本工具的判定：`pyftsubset` 的默认白名单由 `fontTools.subset.Options().layout_features`
+     决定（4.57.0 = **67** 个、4.67.0 = **68** 个，差 `palt` —— §四.1 #13）。本工具只**列出**产物上确实
+     消失了哪些三元组，**不判断**"这个标签该不该丢"。
+
+   **5.4 连字规则判定（`涉及必需字符` 的判定式）**
+
+   **规则键 = 输入码位序列**（不是字形名，也不是 GID 数值）：
+
+   ```
+   lig_rule_key = tuple(码位 of first, 码位 of component_1, ...)   # 只含**输入**字形
+   ```
+
+   - **为什么不能用字形名**：`pyftsubset` 默认 `glyph_names=False` → 产物 post 表降到 **3.0**，
+     名称全部丢失；fontTools 读入时按 GID **合成占位名** `glyph%05d % gid`（实测：gid 3 → `glyph00003`）。
+     拿名字比对，会把"连字仍生效"误判成丢失。
+   - **为什么不能用 GID 数值**：子集重排字形顺序（`junk1` 之类的未用字形被删 → 后面全部前移）；
+     两侧 GID 空间不同。
+   - **为什么输入侧可用码位**：输入字形**都有 cmap 映射**（它们是被用户敲出来的字符），cmap 在子集里保留
+     → 反查稳定。规则键只取输入字形，**目标字形不参与键**（连字目标通常没有 cmap 映射）。
+   - **`涉及必需字符`**：规则的**全部输入码位**都要在 cmap 反查里取到，且与需求字符集 `R0` 非空相交。
+     `layout-survival` 子命令**没有 `--text`**（CLI 面已定，见 `plan/03` §4）→ 实际取**全体**连字规则
+     （等价于不过滤），并在 `summary.layout.ligature_scope` 写 `"all"` 显式说明（**不假装过滤过**）。
+     取不到某个输入码位 → 该规则**跳过**（无法建立跨字体同一性，不猜）。
+   - **差分方向（LOST 与 RENAMED 互斥，先判 LOST）**：
+     - 源侧的 `lig_rule_key` 在产物侧**不存在** → **`LAYOUT_LIGATURE_LOST`**（`error`）；
+     - 存在 → 再判**改名**：记 `name_state(glyph, gid)` = `placeholder` ⇔ 该名字恰好等于
+       `"glyph%05d" % gid`（即 fontTools 的占位名），否则 `named`。
+       **`LAYOUT_LIGATURE_RENAMED`**（`warn`）触发条件：源侧目标 `named` 而产物侧目标 `placeholder`，
+       **或**两侧都 `named` 且名字不同。两侧都 `placeholder` **不算**改名（名字两侧都没了，不是"改名"）。
+       语义：**连字仍生效，但目标字形在产物里没有稳定名字** —— 这正是 `uniFB01 → glyph00003` 这一实测事实，
+       报 `warn` 而非 `error`（功能未失效，只是可追溯性下降）。
+
+   **5.5 失败路径（两条理由不得合并）**
+
+   | 情形 | 输出 | 退出码 | `summary` |
+   |---|---|---|---|
+   | 两侧**都没有** `GSUB` 且都没有 `GPOS` | `SKIPPED(reason=no_layout_tables)` | 0 | 空（不猜） |
+   | 只有一侧有布局表 | 照常判定 + `SKIPPED(reason=layout_tables_missing_on_one_side)`，`detail` 以 `source:` / `subset:` 开头 | 0（除非差集产 `error` → 1） | **非空**：有一侧的表就是可判定的事实，"全量丢失"由差集自然得出，**不因缺表而整份放弃** |
+
+   - 只缺 `GSUB` 而 `GPOS` 两侧都有 → **不是**失败路径：`GSUB` 侧按"源有产物无"判全量丢失，
+     `GPOS` 侧照常比对。`summary.layout.source.gsub` / `.gpos`（及 `.subset.*`）各带 `present: bool`。
+
+   **5.6 落地约束（"同一规则"怎么比、`primary_key` 形态）**
+
+   - 「同一规则」= **输入码位序列相同**（5.4 的 `lig_rule_key`）；两侧各算一次反查，
+     **不比较字形名、不比较 GID 数值**。这不是第二条口径，只是 5.4 规则键的实施方式。
+   - 同一 `lig_rule_key` 在一侧出现多次（重叠规则）→ 取**首次**（`LigatureSet.Ligature` 按优先级排序，
+     首次 = 最高优先级，与规范一致）。
+   - 连字规则的 `primary_key` = `"<TableTag>/<FeatureTag>/<U+xxxx>+<U+xxxx>"`；`FeatureTag` 取
+     "含连字 lookup 的 feature 标签集合"里的 `liga`（若有），否则字母序最小者，再否则 `"-"`。
+   - **层级关系**：连字规则丢失**不抑制** `LAYOUT_FEATURE_LOST` —— 两者是不同粒度的事实
+     （`liga` 三元组可能整体还在，但某条具体规则没了）；`primary_key` 前缀不同，不会撞键。
 6. **退出码**：`0` 通过；`1` 有发现（`error` 级 finding）；`2` 输入非法（文件不可读 / 非字体 / 缺必需参数 / JSON 反序列化失败）。`SKIPPED(reason=...)` 恒为**不影响退出码**的 `note`。
-7. **fixture 名表**：`F1 fstype-nosubset`（0x0108）、`F2 fstype-multibit-v0`（0x000E + v0，**反例守护**）、`F3 fstype-multibit-v3`（0x000E + v3）、`F4 silent-drop`、`F5 metadata-stripped`、`F6 codepage-mismatch`。
-8. **确定性**：所有排序键固定（finding：`module, severity, 主键`；字符集：码位升序；三元组：`script, langsys, feature`）；报告不含时间戳/绝对路径/主机名/用户名；同一输入两次运行逐字节一致。
+7. **fixture 名表**：`F1 fstype-nosubset`（0x0108）、`F2 fstype-multibit-v0`（0x000E + v0，**反例守护**）、`F3 fstype-multibit-v3`（0x000E + v3）、`F4 silent-drop`、`F5 metadata-stripped`、`F6 codepage-mismatch`。**F7 不入仓**：布局对照用**测试内合成字体**（落 `tmp_path`），理由见 §四.1 #14。
+8. **确定性**：所有排序键固定（finding：`module, severity, 主键`；字符集：码位升序；布局三元组：`TableTag, ScriptTag, LangSysTag, FeatureTag`）；报告不含时间戳/绝对路径/主机名/用户名；同一输入两次运行逐字节一致。
 
 ## 七、更正记录（题面初稿 → 实测）
 
@@ -326,7 +429,8 @@
 | 8 | 560 字体的 "restricted 44/560≈7.9%" | 44 是"表面含 bit1"；**版本分流后受限仅 4/560（0.71%）**，40 个 0x000E 在 v0/v1 下应解析为 Editable | 两个数值并列并标注口径（§五） |
 | 9 | Inter "876KB" / Noto Sans SC "17.7MB" | Inter 4.1 `InterVariable.ttf` **879,708 B**；Noto Sans SC Regular（OTF 子集）**8,331,336 B** | 以实测登记（§八） |
 | 10 | "F2 与 F3 只差 `OS/2.version` 一个字节"（M1 生成器初稿注释） | 实测：`OS/2` 表长 **v0 = 78 B / v3+ = 96 B**（`ulCodePageRange` 自 v0 起才有）→ 产物总字节 **1512 vs 1528**；`cmap` 与其余表逐字节一致 | 改文档与生成器说明为"差别只有 version 与表长两处"（§四.1 #4） |
-| 11 | "`expect.json` 记录运行时 fontTools 版本"（M1 生成器初稿） | 3.8 通道写 `4.57.0`、3.12 通道写 `4.67.0`，而**产物二进制逐字节相同** → 跨通道 `--check` 互红 | 改为记录**铸造版本**常量 `GOLDEN_FONTOOLS_VERSION`（§四.1 推论） |
+| 12 | "默认 `layout_features` 是 67 个标签"（M1 记录，未写版本） | **随版本漂移**：4.57.0 = **67**、4.67.0 = **68**（差 `palt`）。`ss01`–`ss08`、`cv01`–`cv14`、`case`、`tnum`、`zero`、`aalt` 两版都**不在**默认集合内 | 两个版本并列登记；`layout-survival` **不判断**某标签该不该丢，只报实际差集（§六.5.3） |
+| 13 | "LookupType 7 是唯一需要解包的 Extension 类型" | **GPOS 的 Extension 是 Type 9 不是 7**（Arial 134 个 GPOS lookup 全为 Type 9；Calibri 254 个同）。只解 7 会让 GPOS 整段读不到 | §六.5.2 明确要求**同时解 7 与 9**；`tests/test_layout_survival.py` 用合成 GPOS Extension 样本钉住 |
 
 ## 八、数据源可获取性与锁文件口径
 
