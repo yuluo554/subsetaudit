@@ -412,7 +412,6 @@ def test_fetch_fonts_check_never_imports_network_at_module_level():
 
 def test_fetch_fonts_reports_missing_without_crashing(tmp_path):
     """`--check` 指向空目录 → 报 MISSING 且 exit 1（不崩）。"""
-    code, out = _run_gen([])  # 只为确认调用形态；真正的断言在下面
     proc = subprocess.run(
         [sys.executable, "-X", "utf8", os.path.join(TOOLS, "fetch_fonts.py"),
          "--check", "--dir", str(tmp_path)],
