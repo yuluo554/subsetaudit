@@ -254,11 +254,27 @@ def test_skeleton_modules_do_not_fabricate_findings():
 
 
 def test_no_font_binaries_tracked_by_git():
-    """商用字体红线：git 索引里不得有任何字体二进制。"""
+    """商用字体红线：git 索引里不得有任何字体二进制。
+
+    **必须确认 git 解析到的仓库根就是本项目根**：源码包（`git archive`）解出来的树没有 `.git`，
+    如果它恰好被解到"另一个仓库的子目录"里，`git ls-files` 会**静默向上**解析到父仓库
+    → 断言扫的是别人的索引（本项目 M0 实测：在仓库内解包时 `git rev-parse --show-toplevel`
+    返回的是**外层**仓库）。这种"绿"证明不了任何事。
+    """
+    toplevel = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=REPO_ROOT,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              universal_newlines=True)
+    if toplevel.returncode != 0:
+        pytest.skip("not a git work tree: %s" % toplevel.stderr.strip())
+    resolved = os.path.normcase(os.path.realpath(toplevel.stdout.strip()))
+    expected = os.path.normcase(os.path.realpath(REPO_ROOT))
+    if resolved != expected:
+        pytest.skip("这是一个无 .git 的解包树，且 git 向上解析到了别处（%s）——"
+                    "此时 ls-files 扫的不是本树，不能当作通过" % resolved)
+
     proc = subprocess.run(["git", "ls-files"], cwd=REPO_ROOT, stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE, universal_newlines=True)
-    if proc.returncode != 0:
-        pytest.skip("not a git work tree: %s" % proc.stderr.strip())
+    assert proc.returncode == 0, proc.stderr
     offenders = [f for f in proc.stdout.split("\n")
                  if f.lower().endswith((".ttf", ".otf", ".ttc", ".otc", ".woff", ".woff2"))]
     assert offenders == [], "字体二进制不得入库: %s" % offenders

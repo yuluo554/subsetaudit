@@ -16,7 +16,9 @@
 | 退出码契约 | ✅ | 五子命令对非字体文件一律 exit 2；缺 `--text/--corpus` 是 argparse exit 2；`SKIPPED` 不影响退出码（exit 0） |
 | 测试 | ✅ | 42 项，`py -3.8`（fontTools 4.57.0 / pytest 7.4.4）与 `py -3.12`（fontTools 4.67.0 / pytest 8.4.2）**两条通道都全绿** |
 | 离线冒烟 | ✅ | `py tools/smoke_cli.py` 10 条命令 0 失败（含一条 exit 2 负向） |
-| CI 接线 | ✅ **本地等价校验（未接远端，CI 待首推验证）** | `.github/workflows/ci.yml` 本地 `yaml.safe_load` 通过：1 job / 8 steps；`tests/test_ci_workflow.py` 断言门步骤、`python` 而非 `py`、`PYTHONUTF8=1`、step name 无裸 `: ` |
+| CI 接线 | ✅ **本地等价校验（未接远端，CI 待首推验证）** | `.github/workflows/ci.yml` 本地 `yaml.safe_load` 通过：1 job / 9 steps；`tests/test_ci_workflow.py` 断言门步骤、`python` 而非 `py`、`PYTHONUTF8=1`、step name 无裸 `: ` |
+| README 安装路径实测 | ✅ | 在干净 venv 里按 README 逐条敲通（含"先升级 pip"这个前置条件）；CI 有 `README install path (clean venv, real keystrokes)` step，本机已按同形脚本跑通 |
+| 干净 clone / 无 `.git` 解包树 | ✅ | `git clone --no-local`：两道门 + 42 测试 + 冒烟全绿；`git archive` 解包树：两道门 + 16 组变异 + 42 测试 + 冒烟全绿 |
 | 版本一致 | ✅ | `__init__.__version__` == `pyproject.toml` == README 状态行（两条测试断言） |
 | 无字体二进制 | ✅ | `tests/test_cli.py::test_no_font_binaries_tracked_by_git`（git 索引过滤为空） |
 | **M1 数据层** | ⬜ | 未开始：`tools/gen_fixtures.py`、`tools/fetch_fonts.py`、`data/fonts.lock` 均不存在（布局门以 `PENDING_TOOLS` 显式登记，属预期） |
@@ -96,6 +98,14 @@
 - **`python -m subsetaudit` 需要 `__main__.py`**（M0 冒烟实测：没有它报
   `No module named subsetaudit.__main__`）。已补 `src/subsetaudit/__main__.py`。
 - 中文输出一律 `py -X utf8`；CI 侧靠 job 级 `PYTHONUTF8=1`（两条通路都要加固）。
+- **`git ls-files` 会静默向上解析到父仓库**（2026-10-21 M0 实测）：把 `git archive` 解到本仓库的
+  子目录里时，`git rev-parse --show-toplevel` 返回的是**外层**仓库 → "无字体二进制"这条断言
+  扫的是别人的索引（假绿）。已修：断言前先比对 toplevel 与本项目根，不一致就**显式 skip**
+  （不伪造"已通过"）。判别 = **"这条 git 元数据判据，解析到的仓库是我以为的那个吗？"**
+- **Python 3.8 的 `venv` 自带 pip 20.2.3，不支持 PEP 660**：`pip install -e .` 会报
+  `editable mode currently requires a setup.py based build`。必须先 `pip install --upgrade pip`
+  （README 已写明，CI 有专门 step 真敲一遍）。
+- **venv 里没有 `py` 启动器**：只能用 `./.venv/Scripts/python.exe`（Git Bash）或 `.venv\Scripts\python.exe`。
 
 ## 六、DoD 逐项 checklist（M1）
 
