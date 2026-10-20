@@ -124,9 +124,8 @@ py tools/check_sprint_layout.py     # 布局门（方法论装订）
 py tools/check_desensitized.py      # 脱敏门
 py tools/verify_gates.py            # 两道门的变异验证（16 组必须全红）
 
-# 测试（仓库根目录；tests/ 会自己把 src/ 放进路径）
-PYTHONPATH=src py -X utf8 -m pytest -q
-# 或装好之后：./.venv/Scripts/python.exe -m pytest -q
+# 测试（仓库根目录直接跑；tests/conftest.py 会把 src/ 放进路径，无需先安装）
+py -X utf8 -m pytest -q
 ```
 
 后续里程碑（M1 起）会用到这些脚本，**当前尚未实现**（见 `plan/05` 与 `plan/06` 缺口表）：

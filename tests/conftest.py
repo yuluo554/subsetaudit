@@ -6,6 +6,14 @@
 from __future__ import print_function
 
 import os
+import sys
+
+# src 布局：让"刚 clone / 未安装"的树也能直接 `py -m pytest`。
+# 放在 conftest 顶部（pytest 在收集前加载它），比要求调用方设 PYTHONPATH 更省事；
+# 注意这条只影响**测试进程**，不改变包本身的导入形态。
+_SRC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src")
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
 
 import pytest
 
