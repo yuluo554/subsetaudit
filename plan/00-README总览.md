@@ -25,14 +25,16 @@
 | tools/check_sprint_layout.py | 布局门（9 判据） | ✅ v1（M0） |
 | tools/check_desensitized.py | 脱敏门（4 条规则） | ✅ v1（M0） |
 | tools/verify_gates.py | 两道门的变异验证常驻（16 组） | ✅ v1（M0，靶子随里程碑翻新） |
-| tools/smoke_cli.py | 离线冒烟（10 条命令，含一条 exit 2 负向） | ✅ v1（M0） |
+| tools/smoke_cli.py | 离线冒烟（11 条命令，含一条 exit 2 负向） | ✅ v1（M0/M4） |
+| tools/check_release.py | 发布终态门（`--pre-tag` / 离线 / `--online` 三档） | ✅ v1（M6） |
 | tools/gen_fixtures.py | F1–F6 合成破损 fixture 生成器（`--only` / `--check` / 独立 oracle 自证） | ✅ v1（M1） |
 | tools/fetch_fonts.py | OFL 字体锁文件校验（默认离线 `--check`）/ 下载（`--download`） | ✅ v1（M1） |
 | data/fonts.lock | 3 个 OFL 字体的 URL + 字节数 + sha256（二进制不入仓） | ✅ v1（M1） |
 | data/fixtures/ | F1–F6 的 `expect.json` + `README.md` + `manifest.json`（产物 gitignore） | ✅ v1（M1） |
+| docs/report-sample.json | 报告样例（规范 JSON，用现行实现现跑） | ✅ v1（M6） |
 | src/subsetaudit/ | 五子命令 + 共享层（sfnt / cmapset / canonical）；五个模块**全部**已实现判定 | ✅ v1（M5，无骨架模块） |
-| plan/HANDOFF-M*.md | 各里程碑交接快照（M1–M5 已落盘；**HANDOFF-M6 已写**，等发布棒执行） | ✅ v1（M5） |
-| plan/RELEASE-M6.md | 发布留档（tag 时点事实 / tag 后追加事实分栏） | ⏳ M6 |
+| plan/HANDOFF-M*.md | 各里程碑交接快照（M1–M6 已落盘） | ✅ v1（M6） |
+| plan/RELEASE-M6.md | 发布留档（tag 时点事实 / tag 后追加事实分栏） | ✅ v1（M6） |
 
 ## 决策记录表
 
@@ -52,6 +54,8 @@
 | 2026-10-19 | **退出码契约：0 / 1 / 2** | `0` 通过、`1` 有发现（`error` 级）、`2` 输入非法。`SKIPPED(reason=...)` 恒为不影响退出码的 `note`（显式输出，不写日志了事）。 |
 | 2026-10-19 | **首期不做子集生成器** | subfont 1636★ / glyphhanger 1123★ / fontmin 6220★ / font-spider 5140★ 红海；且生成器与校验器共用实现会丧失"独立判据"这一唯一价值。 |
 | 2026-10-19 | **隐私与网络边界** | 纯本地零网络；仅 `tools/fetch_fonts.py`（用户显式运行时）联网下载 OFL 字体，默认 `--check` 不联网。 |
+| 2026-10-21 | **发布门分三档（`--pre-tag` / 离线 / `--online`），只有 `--online` 联网** | tag 之后改交付面 = 让 tag 撒谎，所以"**能不能**打 tag"与"tag 打**对了没有**"必须分开判。`--pre-tag` 只落仓库内文件、零网络；`--online` 才查远端（公开可见性 / tag / Release 附产物 / push 数 = 工作流运行数），与"运行期零网络"纪律不冲突（用户显式触发，同 `tools/fetch_fonts.py`）。 |
+| 2026-10-21 | **`PENDING_TOOLS` 清空为 `{}`（不再有"未到里程碑的工具"）** | 最后一个登记项（`tools/check_release.py`）随 M6 落盘自清理（K10）。此后文档里点名一个不存在的 `tools/*.py` **直接红**，没有登记表兜底 —— 这是发布后的正确形态。 |
 
 ## 弃选项（否决理由）
 
@@ -88,6 +92,8 @@
 | 数值口径一处定义 | data §六 | ✅ 9 条口径（§六.1 五元结论判定式 + 六条违规码 + `spec_ref` 字面量；§六.2 三分类级别 + §六.2.1 闭包；§六.3 两条失败路径；§六.4 互斥分区优先级；§六.5.1–§六.5.6 布局三元组 / 计数 / 判定式 / 连字规则 / 失败路径 / 落地约束；§六.9.1–§六.9.7 元数据 name/码页/Unicode 位域/maxp/首末码位/失败路径/report 聚合） |
 | 560 字体分布 + 不可外推声明 | data §五 | ✅ 只读实测 + 声明 |
 | 未核实项与更正记录 | data §七、§九 | ✅ 9 条更正 + 6 条未核实 |
+| M6 发布（tag + Release 附产物 + 留档） | plan/01 §四 8、plan/06 G7 | ✅ 已完成（`v0.1.0` 已推公开仓库；事实逐条见 `plan/RELEASE-M6.md`） |
+| 发布终态门落地（`--pre-tag` / 离线 / `--online`） | plan/03 §7、plan/06 G7 | ✅ 三档可跑；`PENDING_TOOLS` 自清理为空 |
 
 ## 里程碑
 
@@ -99,7 +105,7 @@
 | **M3 覆盖差集** | `coverage-diff` | 复现 `--text="汉字abc"` 静默丢字并判 `LOST_IN_SUBSET`；pdfcraft#381 字组"高频在、中频缺"指纹可复现；非 Unicode cmap 走 `SKIPPED`；F4 golden 一致 | ✅ |
 | **M4 布局保真** | `layout-survival` | Type 7/9 解包后规则数正确（朴素遍历作对照）；默认丢弃标签被列出；`uniFB01 → glyph00003` 改名被认出 | ✅ |
 | **M5 元数据与报告** | `metadata` + `report` | msyh 码页矛盾被抓住而 `ulUnicodeRange1=0` **不**误报（以 OFL 同构样本复现）；F5/F6 golden 一致；退出码 0/1/2 三档 fixture；报告逐字节确定 | ✅ |
-| **M6 发布** | GitHub **公开仓库** v0.1.0 | **DoD = git tag + GitHub Release 附产物 + 发布留档三件套**（`plan/RELEASE-M6.md` 记 tag 时点事实与 tag 后追加事实）；干净环境 `pip install -e .` 后五子命令可用；`LICENSE`（MIT）与 `pyproject.toml` license 字段一致 | ⬜ |
+| **M6 发布** | GitHub **公开仓库** v0.1.0 | **DoD = git tag + GitHub Release 附产物 + 发布留档三件套**（`plan/RELEASE-M6.md` 记 tag 时点事实与 tag 后追加事实）；干净环境 `pip install -e .` 后五子命令可用；`LICENSE`（MIT）与 `pyproject.toml` license 字段一致 | ✅ |
 
 **环境事实（口径随行）**：本机 Python **3.8.8**（因此不依赖 `tomllib`，所有锁文件/基线走 JSON 或受限 TOML 子集）；fontTools 4.57.0（`pyftsubset` 行为随版本漂移：`layout_features` 默认集、`prune_*` 默认值、`recalcCodePageRanges` 回退均在 4.x 内变动过）→ **报告必须写 `fonttools_version`；fixture golden 与 fontTools 版本绑定，升级需重跑 `tools/gen_fixtures.py --check`**。
 

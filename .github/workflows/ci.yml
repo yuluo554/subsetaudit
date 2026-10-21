@@ -89,3 +89,8 @@ jobs:
       # 每条已交付命令都要有一条离线冒烟（"绿矩阵"不是"它跑过"的证据）
       - name: "Smoke — five subcommands on a synthetic font"
         run: python tools/smoke_cli.py
+
+      # 发布终态门（M6）：CI 里只跑 `--pre-tag`（只落仓库内文件、零网络）——
+      # `--online` 需要远端事实与 gh token，属发布棒手工动作，不进 CI。
+      - name: "Release gate (pre-tag, offline)"
+        run: python tools/check_release.py --pre-tag

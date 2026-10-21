@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""门自证：对两道门做**变异验证**（改坏被测对象 → 指定判据必须变红 → 还原逐字节一致）。
+"""门自证：对**三道门**做**变异验证**（改坏被测对象 → 指定判据必须变红 → 还原逐字节一致）。
 
 为什么常驻：`ai-tool-project-sprint` 的纪律是"判据有几条，变异就做几组"，而**变异靶子会随
 项目进度过期**（某个里程碑翻 ✅ 后，原来的靶子就不存在了）。把它做成脚本，每棒收尾重跑一次，
@@ -11,6 +11,10 @@
   · 变异后：文件字节必须**确实变了**（否则测的是空转）；
   · 跑门：目标判据 ID 必须报 FAIL（**只认那一条**，别的判据红不红不影响本条结论）；
   · 还原后：文件字节与原始**逐字节一致**，且门复绿。
+
+分组：
+  L* 布局门（`check_sprint_layout.py`）／ V* 脱敏门（`check_desensitized.py`）／
+  R* 发布终态门（`check_release.py --pre-tag`，M6 加的新门 → 判据有几条、变异就补几组）。
 
 退出码：0 全部符合预期 / 1 有不符合 / 2 用法错误。
 用法：py tools/verify_gates.py [--only L1,L3] [--verbose]
@@ -28,6 +32,7 @@ PY = sys.executable
 
 LAYOUT = "tools/check_sprint_layout.py"
 DESENS = "tools/check_desensitized.py"
+RELEASE = "tools/check_release.py"
 
 
 # ── 文件工具 ────────────────────────────────────────────────────────────────
@@ -45,9 +50,9 @@ def write(rel, text):
         fh.write(text)
 
 
-def run_gate(rel):
+def run_gate(rel, extra=None):
     proc = subprocess.Popen(
-        [PY, "-X", "utf8", os.path.join(ROOT, rel)],
+        [PY, "-X", "utf8", os.path.join(ROOT, rel)] + list(extra or []),
         cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
     )
     out = proc.communicate()[0]
@@ -56,6 +61,13 @@ def run_gate(rel):
     except Exception:  # noqa: BLE001
         text = str(out)
     return proc.returncode, text
+
+
+def _git(*args):
+    proc = subprocess.Popen(["git"] + list(args), cwd=ROOT, stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT)
+    out = proc.communicate()[0]
+    return proc.returncode, out.decode("utf-8", "replace")
 
 
 def failed_ids(output):
@@ -106,17 +118,6 @@ def _remove(rel):
     return undo
 
 
-def _create(rel, text):
-    assert not os.path.exists(path_of(rel)), "临时文件已存在: %s" % rel
-    write(rel, text)
-
-    def undo():
-        if os.path.exists(path_of(rel)):
-            os.remove(path_of(rel))
-
-    return undo
-
-
 def _chain(*steps):
     """按序执行；返回逆序 undo。"""
     undos = [step() for step in steps]
@@ -128,60 +129,49 @@ def _chain(*steps):
     return undo
 
 
-RELEASE_STUB = """# RELEASE-M6（变异验证用临时件）
-
-## 一、tag 前事实
-
-| 项 | 值 |
-|---|---|
-| 版本 | v0.1.0 |
-
-## 二、tag 后追加事实
-
-（临时）
-
-## 三、阶段 7 覆盖对账
-
-| 出口门 | 状态 | 证据 |
-|---|---|---|
-| A1 本体已验 | 实现 | stub |
-| A2 附件同源 | 实现 | stub |
-| A3 源码包自足 | 不适用 | stub |
-"""
-
-
-def _mark_done(milestone):
-    """把某里程碑在三处副本里都标成 ✅（供 HANDOFFS / RELEASE 类变异用）。"""
-    rel_map = {
-        "plan/00-README总览.md": "| **M%d",
-        "plan/05-里程碑.md": "| M%d",
-        "README.md": "| M%d",
-    }
-    undos = []
-    for rel, prefix in rel_map.items():
-        text = read(rel)
-        lines = text.split("\n")
-        hit = None
-        for i, line in enumerate(lines):
-            if line.startswith(prefix % milestone):
-                hit = i
-                break
-        assert hit is not None, "%s 找不到 M%d 行" % (rel, milestone)
-        old_line = lines[hit]
-        assert "⬜" in old_line, "M%d 行本来就不是 ⬜: %r" % (milestone, old_line)
-        lines[hit] = old_line.replace("⬜", "✅")
-        write(rel, "\n".join(lines))
-        undos.append((rel, text))
-        assert read(rel) != text
+def _append_bytes(rel, extra):
+    """往文件**追加字节**（改坏 fixture 产物用）。undo 还原原字节。"""
+    path = path_of(rel)
+    with open(path, "rb") as fh:
+        original = fh.read()
+    with open(path, "ab") as fh:
+        fh.write(extra)
+    with open(path, "rb") as fh:
+        assert fh.read() != original, "追加后文件未变化: %s" % rel
 
     def undo():
-        for rel, text in reversed(undos):
-            write(rel, text)
+        with open(path, "wb") as fh:
+            fh.write(original)
 
     return undo
 
 
-HANDOFF_STUB_INCOMPLETE = "# HANDOFF-M2\n\n## 当前进度\n\n（变异验证用：故意缺节）\n"
+def _stage_font_binary(rel, payload=b"not-a-real-font"):
+    """造一个**入库的字体二进制**：写文件 + 强制 `git add`（绕过 .gitignore）。
+
+    靶子语义 = "红线被破时 `RELEASE.NO_FONT_BINARIES` 必须红"。undo 必须**恢复 git 索引**，
+    否则工作树虽然干净、索引里却留着一条假入库项（`verify_gates` 的逐字节复核看不见索引）。
+    """
+    path = path_of(rel)
+    assert not os.path.exists(path), "临时文件已存在: %s" % rel
+    with open(path, "wb") as fh:
+        fh.write(payload)
+    rc, out = _git("add", "-f", rel)
+    assert rc == 0, "git add -f 失败: %s" % out
+    _, staged = _git("ls-files", "--", rel)
+    assert staged.strip() == rel, "文件没进索引: %r" % staged
+
+    def undo():
+        _git("rm", "--cached", "-f", "--quiet", rel)
+        if os.path.exists(path):
+            os.remove(path)
+
+    return undo
+
+
+# 2026-10-21 M6 收尾：`_create` / `RELEASE_STUB` / `HANDOFF_STUB_INCOMPLETE` / `_mark_done`
+# 四个 helper 随"下一个 ⬜ 里程碑"机制一起退役（它们是那个机制的零件：造临时件 + 把里程碑
+# 翻 ✅）。留着会让人以为还有"造靶子件"的能力 —— 靶子已改为打在**既有真实文件**上。
 
 
 def _leak_payload(*parts):
@@ -201,6 +191,12 @@ LEAK_MSYS = _leak_payload("/c/Users/", "AS", "US", "/x")
 LEAK_LOOPBACK = _leak_payload("127.0.0.", "1:7897")
 
 
+#: 发布终态门只跑 `--pre-tag`（离线、零网络）—— 与 CI 里那一步同口径。
+#: 逐门的调用参数表：门的"模式"是实现的一部分，变异必须跑在与 CI/发布棒相同的模式下。
+RELEASE_ARGS = ("--pre-tag",)
+GATE_ARGS = {RELEASE: RELEASE_ARGS}
+
+
 MUTATIONS = [
     ("L1", "删 AGENTS.md", LAYOUT, "LAYOUT.FILES",
      lambda: _remove("AGENTS.md")),
@@ -211,55 +207,52 @@ MUTATIONS = [
      lambda: _replace_once("plan/06-交付对标与决策.md",
                            "| CI 实跑 | 无远端，未跑过 | 首次 push 后登记 run id |",
                            "| CI 实跑（M0） | 无远端，未跑过 | 首次 push 后登记 run id |")),
-    # 靶子语义 = "**下一个还没完成的里程碑**翻 ✅ 但交接单缺节"。
-    # 2026-10-21 M1 收尾时把靶子从 M1 移到 M2；M2 收尾移到 M3；M3 收尾移到 M4；M4 收尾移到 M5；
-    # M5 收尾移到 M6（已 ✅ 的里程碑上 `_mark_done(k)` 会在 "M<k> 行本来就不是 ⬜" 处断言失败
-    # → SKIP，不是 PASS）。靶子必须打"当前是 ⬜ 的那个"。
-    ("L4", "M6 标 ✅ 但交接单缺节", LAYOUT, "LAYOUT.HANDOFFS",
-     lambda: _chain(
-         lambda: _mark_done(6),
-         (lambda: _create("plan/HANDOFF-M6.md", HANDOFF_STUB_INCOMPLETE))
-         if not os.path.exists(path_of("plan/HANDOFF-M6.md"))
-         else (lambda: _replace_once("plan/HANDOFF-M6.md", "## 五、本机环境坑", "## 五、环境"))
-     )),
+    # ── 靶子纪律（2026-10-21 M6 收尾，见 HANDOFF-M6 §二.8）──────────────────────
+    # M6 之后**没有下一个 ⬜ 里程碑**了，所以"把下一个里程碑标 ✅、再改坏它的收尾件"
+    # 这一类靶子（L4/L6/L8/L9/L10/L12 原先都靠 `_mark_done(6)`）整体失效：`_mark_done`
+    # 在"该行本来就不是 ⬜"处断言失败 → 六条一起 SKIP。
+    # 处置 = **换成不依赖下一个里程碑的靶子**：打在**已 ✅ 里程碑的真实交接单**（M5）与
+    # **真实发布留档**（`plan/RELEASE-M6.md`）上。判据面不变（HANDOFFS / RELEASE /
+    # LEDGER / DOC_TOOLS 四条照旧），但前提从"未来进度"变成"既有事实"，不会再过期。
+    ("L4", "已 ✅ 里程碑（M5）的交接单缺节", LAYOUT, "LAYOUT.HANDOFFS",
+     lambda: _replace_once("plan/HANDOFF-M5.md",
+                           "## 五、本机环境坑（只写实测过的）",
+                           "## 五、环境（七节关键词被改写）")),
     ("L5", "删 plan/00 顶部装订行", LAYOUT, "LAYOUT.BINDING_HEAD",
      lambda: _replace_once("plan/00-README总览.md",
                            "> 方法论：`ai-tool-project-sprint`（装订 2026-10-21）",
                            "> （装订行被移除）方法论：")),
     ("L6", "删发布留档的覆盖对账整节", LAYOUT, "LAYOUT.RELEASE",
-     lambda: _chain(lambda: _mark_done(6),
-                    lambda: _create("plan/RELEASE-M6.md", RELEASE_STUB),
-                    lambda: _replace_once("plan/RELEASE-M6.md",
-                                          "## 三、阶段 7 覆盖对账", "## 三、其它"))),
+     lambda: _replace_once("plan/RELEASE-M6.md",
+                           "## 三、阶段 7 覆盖对账", "## 三、其它")),
     ("L7", "删 plan/02（计划套件缺一份）", LAYOUT, "LAYOUT.FILES",
      lambda: _remove("plan/02-架构与技术选型.md")),
     ("L8", "去掉发布留档 §二 标题里的 'tag 后'", LAYOUT, "LAYOUT.RELEASE",
-     lambda: _chain(lambda: _mark_done(6),
-                    lambda: _create("plan/RELEASE-M6.md", RELEASE_STUB),
-                    lambda: _replace_once("plan/RELEASE-M6.md",
-                                          "## 二、tag 后追加事实", "## 二、追加事实"))),
-    # L9 的语义是"**已 ✅ 的里程碑**在台账里仍挂未完成标记"，所以必须先让目标里程碑翻 ✅
-    # 再往台账写 `⬜ 待 M<k>` —— 否则那一行是**正确状态**，不该红
-    # （变异验证首版就瞄错了靶子：靶子挑错时"没红"不代表门假）。
-    ("L9", "M6 已 ✅ 但台账里仍写 ⬜ 待 M6", LAYOUT, "LAYOUT.LEDGER",
-     # 2026-10-21 M1 收尾：靶子从 M1 移到 M2；M2 收尾移到 M3；M3 收尾移到 M4；M4 收尾移到 M5；
-     # M5 收尾移到 M6（已 ✅ 的里程碑上 `_mark_done(k)` 会 SKIP）。
-     # ⚠️ M6 是**发布里程碑**：`_mark_done(6)` 还会让 LAYOUT.RELEASE 红，但本组只认 LEDGER 那一条。
-     lambda: _chain(lambda: _mark_done(6),
-                    lambda: _replace_once("plan/00-README总览.md",
-                                          "| 定位宣言含\"审产物不审项目\" | plan/01 §头部、README | ✅ 已写 |",
-                                          "| 定位宣言含\"审产物不审项目\" | plan/01 §头部、README | ⬜ 待 M6 验证 |"))),
+     lambda: _replace_once("plan/RELEASE-M6.md",
+                           "## 二、tag 后追加事实", "## 二、追加事实")),
+    # L9 的语义是"**已 ✅ 的里程碑**在台账里仍挂未完成标记"。M6 收尾后靶子改打在
+    # **已 ✅ 的 M1** 那一行上（不再需要先把某个里程碑翻 ✅）。
+    ("L9", "已 ✅ 里程碑（M1）在台账里仍挂 ⬜ 待办", LAYOUT, "LAYOUT.LEDGER",
+     lambda: _replace_once("plan/00-README总览.md",
+                           "| M1 `license-gate`（版本分流 + 三类闸门） | plan/01 §三 M1 | ✅ 含 5 条验收；**M2 里程碑已实现**（五元结论口径入 §六.1.3） |",
+                           "| M1 `license-gate`（版本分流 + 三类闸门） | plan/01 §三 M1 | ⬜ 待 M1 复核 |")),
     ("L10", "发布里程碑 ✅ 但删掉 RELEASE 留档", LAYOUT, "LAYOUT.RELEASE",
-     lambda: _mark_done(6)),
+     lambda: _remove("plan/RELEASE-M6.md")),
     ("L11", "文档点名一个不存在的 tools/*.py", LAYOUT, "LAYOUT.DOC_TOOLS",
      lambda: _replace_once("plan/06-交付对标与决策.md",
                            "## 3. 验收门（每棒都要过的门，按顺序）",
                            "## 3. 验收门（每棒都要过的门，按顺序）\n\n> 变异验证用：`tools/does_not_exist.py`\n")),
-    ("L12", "PENDING_TOOLS 里的工具所属里程碑翻 ✅（登记项未清理）", LAYOUT, "LAYOUT.DOC_TOOLS",
-     # 2026-10-21 M1 收尾：M1 的两条登记已按纪律删除，PENDING_TOOLS 只剩
-     # `tools/check_release.py: 6` → 靶子必须打 M6（翻 ✅ 后登记项必须自清理）。
-     # 注意 M6 翻 ✅ 同时会让 LAYOUT.RELEASE 红，但本组只认 DOC_TOOLS 那一条。
-     lambda: _mark_done(6)),
+    ("L12", "PENDING_TOOLS 登记一个已 ✅ 里程碑名下、却不存在的脚本", LAYOUT, "LAYOUT.DOC_TOOLS",
+     # 2026-10-21 M6 收尾：`PENDING_TOOLS` 已清空（最后一个登记项随 M6 自清理）→ 原来
+     # "把登记项所属里程碑翻 ✅"的靶子不再可构造。改法：**直接往登记表里塞一条过期登记**
+     # （里程碑 5 已 ✅）+ 在文档里点名该脚本 —— 判据仍是"登记项必须自清理"这一条。
+     lambda: _chain(
+         lambda: _replace_once("tools/check_sprint_layout.py",
+                               "PENDING_TOOLS = {}",
+                               'PENDING_TOOLS = {\n    "tools/pending_probe.py": 5,\n}'),
+         lambda: _replace_once("plan/06-交付对标与决策.md",
+                               "## 3. 验收门（每棒都要过的门，按顺序）",
+                               "## 3. 验收门（每棒都要过的门，按顺序）\n\n> 变异验证用：`tools/pending_probe.py`\n"))),
     ("V1", "写一行绝对会话路径", DESENS, "absolute-session-path",
      lambda: _replace_once("plan/06-交付对标与决策.md", "## 4. 风险登记",
                            "## 4. 风险登记\n\n<!-- 变异验证用：%s -->\n" % LEAK_ABSOLUTE)),
@@ -272,12 +265,39 @@ MUTATIONS = [
     ("V4", "写回环代理端口", DESENS, "loopback-proxy",
      lambda: _replace_once("plan/06-交付对标与决策.md", "## 4. 风险登记",
                            "## 4. 风险登记\n\n<!-- 变异验证用：%s -->\n" % LEAK_LOOPBACK)),
+    # ── 发布终态门 R1–R8（M6 加的新门 → 判据有几条、变异就补几组）─────────────────
+    # 靶子全部打在**真实交付面**上（版本三处 / LICENSE / 报告样例 / cli 参数面 /
+    # git 索引 / 发布留档 / PENDING_TOOLS），不依赖"下一个 ⬜ 里程碑"。
+    ("R1", "把 README 状态行的版本改回旧值（三处不一致）", RELEASE, "RELEASE.VERSION_TRIPLE",
+     lambda: _replace_once("README.md", "- **版本**：v0.1.0（M6 已发布）",
+                           "- **版本**：v0.0.9（变异验证用）"), RELEASE_ARGS),
+    ("R2", "把 pyproject 的 license 字段改成非 MIT", RELEASE, "RELEASE.LICENSE_CONSISTENT",
+     lambda: _replace_once("pyproject.toml", 'license = { text = "MIT" }',
+                           'license = { text = "Apache-2.0" }'), RELEASE_ARGS),
+    ("R3", "把报告样例的 tool.version 改旧（与现行实现不同源）", RELEASE, "RELEASE.SAMPLE_JSON",
+     lambda: _replace_once("docs/report-sample.json", '"version": "0.1.0"',
+                           '"version": "0.0.1"'), RELEASE_ARGS),
+    ("R4", "删 cli.py 的 report 子命令（五子命令不全）", RELEASE, "RELEASE.SUBCMDS",
+     lambda: _replace_once("src/subsetaudit/cli.py", 'sub.add_parser("report"',
+                           'sub.add_parser("report-renamed"'), RELEASE_ARGS),
+    ("R5", "把一个字体二进制强加进 git 索引（破'无商用/无字体二进制'红线）",
+     RELEASE, "RELEASE.NO_FONT_BINARIES",
+     lambda: _stage_font_binary("tools/_probe_redline.ttf"), RELEASE_ARGS),
+    ("R6", "改坏一个 fixture 产物（位级一致性被破）", RELEASE, "RELEASE.FIXTURES_BITWISE",
+     lambda: _append_bytes("data/fixtures/silent-drop/out/subset.ttf", b"X"), RELEASE_ARGS),
+    ("R7", "删发布留档的覆盖对账整节", RELEASE, "RELEASE.RELEASE_DOC",
+     lambda: _replace_once("plan/RELEASE-M6.md", "## 三、阶段 7 覆盖对账", "## 三、其它"),
+     RELEASE_ARGS),
+    ("R8", "往 PENDING_TOOLS 塞一条已 ✅ 里程碑名下的过期登记", RELEASE,
+     "RELEASE.PENDING_TOOLS_CLEARED",
+     lambda: _replace_once("tools/check_sprint_layout.py", "PENDING_TOOLS = {}",
+                           'PENDING_TOOLS = {\n    "tools/probe.py": 5,\n}'), RELEASE_ARGS),
 ]
 
 
 def _snapshot():
     """变异前的门结论（用于"还原后复绿"）。"""
-    return run_gate(LAYOUT), run_gate(DESENS)
+    return run_gate(LAYOUT), run_gate(DESENS), run_gate(RELEASE, RELEASE_ARGS)
 
 
 def _tree_hashes():
@@ -316,8 +336,8 @@ def main(argv):
             sys.stderr.write("verify_gates: 未知参数 %r\n" % arg)
             return 2
 
-    base_layout, base_desens = _snapshot()
-    baseline = {LAYOUT: base_layout, DESENS: base_desens}
+    base_layout, base_desens, base_release = _snapshot()
+    baseline = {LAYOUT: base_layout, DESENS: base_desens, RELEASE: base_release}
     for gate, (rc, out) in baseline.items():
         if rc != 0:
             sys.stderr.write("基线不绿，变异验证没有意义：%s rc=%s\n%s\n" % (gate, rc, out))
@@ -325,7 +345,12 @@ def main(argv):
 
     results = []
     before = _tree_hashes()
-    for mut_id, desc, gate, expected, apply_mut in MUTATIONS:
+    for mutation in MUTATIONS:
+        if len(mutation) == 6:
+            mut_id, desc, gate, expected, apply_mut, gate_args = mutation
+        else:
+            mut_id, desc, gate, expected, apply_mut = mutation
+            gate_args = GATE_ARGS.get(gate)
         if only is not None and mut_id not in only:
             continue
         undo = None
@@ -340,7 +365,7 @@ def main(argv):
                 print("SKIP %-4s %s（靶子已随进度消失: %s）" % (mut_id, desc, exc))
                 results.append((mut_id, desc, expected, None, ["skipped"], "-"))
                 continue
-            rc, out = run_gate(gate)
+            rc, out = run_gate(gate, gate_args)
             ids = failed_ids(out)
             ok = rc == 1 and expected in ids
             results.append((mut_id, desc, expected, ok, ids, rc))
@@ -350,7 +375,7 @@ def main(argv):
         finally:
             if undo is not None:
                 undo()
-            rc2, out2 = run_gate(gate)
+            rc2, out2 = run_gate(gate, gate_args)
             if rc2 != 0 and undo is not None:
                 print("!! %s 还原后门未复绿 rc=%s\n%s" % (mut_id, rc2, out2))
                 results.append((mut_id + "-restore", "还原后复绿", gate, False, failed_ids(out2), rc2))
@@ -369,12 +394,16 @@ def main(argv):
 
     rc_layout, out_layout = run_gate(LAYOUT)
     rc_desens, out_desens = run_gate(DESENS)
-    green = rc_layout == 0 and rc_desens == 0
+    rc_release, out_release = run_gate(RELEASE, RELEASE_ARGS)
+    green = rc_layout == 0 and rc_desens == 0 and rc_release == 0
     if not green:
-        print("!! 全部还原后两道门未复绿：layout rc=%s desens rc=%s" % (rc_layout, rc_desens))
-        results.append(("regreen", "还原后两道门复绿", "-", False, [], 1))
+        print("!! 全部还原后三道门未复绿：layout rc=%s desens rc=%s release rc=%s"
+              % (rc_layout, rc_desens, rc_release))
+        if rc_release != 0:
+            print(out_release)
+        results.append(("regreen", "还原后三道门复绿", "-", False, [], 1))
     else:
-        print("复绿复核：布局门 + 脱敏门均绿")
+        print("复绿复核：布局门 + 脱敏门 + 发布门均绿")
 
     ok_all = all(r[3] is True or r[3] is None for r in results)
     verified = sum(1 for r in results if r[3] is True)

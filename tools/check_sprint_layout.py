@@ -102,11 +102,11 @@ RELEASE_MILESTONE = 6
 
 # 文档点名但**尚未到该里程碑**的工具：显式登记（而不是删掉引用）。
 # 规则：登记项所属里程碑翻 ✅ 之后必须删除本条，否则 DOC_TOOLS 变红（自清理）。
-# 2026-10-21 M1 翻 ✅：`tools/gen_fixtures.py` 与 `tools/fetch_fonts.py` 已删除登记
-# （两者实物已落盘）；只剩 M6 的 `check_release.py`。
-PENDING_TOOLS = {
-    "tools/check_release.py": 6,
-}
+# 2026-10-21 M1 翻 ✅：`tools/gen_fixtures.py` 与 `tools/fetch_fonts.py` 已删除登记。
+# 2026-10-21 M6 翻 ✅：`tools/check_release.py` 实物已落盘 → 登记一并删除。
+# **本表为空是 M6 之后的正确形态**：再无"文档点名但未落位"的工具；一旦有人往文档里写
+# 一个新脚本名而实物不存在，DOC_TOOLS 会立刻红（登记表已不再替他兜底）。
+PENDING_TOOLS = {}
 
 
 # ── 判据 ────────────────────────────────────────────────────────────────────

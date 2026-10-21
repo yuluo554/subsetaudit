@@ -5,7 +5,7 @@
 **审的是产物，不是字体项目。** 输入 = 原字体 + 子集字体 + 必须支持的字符集；
 输出 = 子集是否真覆盖、GSUB/GPOS 是否被弄坏、许可是否允许子集、元数据是否被剥掉。
 
-- **版本**：v0.1.0.dev0（M5 元数据与报告完成；待 M6 发布）
+- **版本**：v0.1.0（M6 已发布）
 - **交付形态**：纯本地 **Python CLI**（零网络、零模型、零商用字体）
 - **运行期依赖**：`fonttools`（唯一）｜**Python** ≥ 3.8
 
@@ -35,7 +35,7 @@ py -m venv .venv
 > **前置条件**：`pip install -e .` 需要 pip ≥ 21.3（PEP 660）。Python 3.8 的 `venv` 自带
 > pip 20.2.3，**不先升级会报** `editable mode currently requires a setup.py based build`。
 
-## 现状（M5 元数据与报告完成）
+## 现状（M6 已发布）
 
 | 里程碑 | 内容 | 状态 |
 |---|---|---|
@@ -45,7 +45,7 @@ py -m venv .venv
 | M3 | `coverage-diff` 覆盖差集（三分类 + 回退链） | ✅ |
 | M4 | `layout-survival` 布局保真（Type 7/9 解包） | ✅ |
 | M5 | `metadata` + `report`（cmap↔OS/2 交叉一致性） | ✅ |
-| M6 | 发布：GitHub 公开仓库 v0.1.0 | ⬜ |
+| M6 | 发布：GitHub 公开仓库 v0.1.0 | ✅ |
 
 > 状态语义：`✅` 已完成、`⬜` 未开始。**五个子命令全部产出真实判定**（M5 起 `metadata`
 > 与 `report` 不再走骨架出口）。`SKIPPED(reason=...)` 只在**输入真的缺表**时出现
@@ -263,14 +263,25 @@ py tools/verify_gates.py            # 两道门的变异验证（16 组必须全
 py -X utf8 -m pytest -q
 ```
 
-后续里程碑（M2 起）会用到这些脚本，**当前尚未实现**（见 `plan/05` 与 `plan/06` 缺口表）：
-
-- `tools/check_release.py` — 发布终态门（M6）
-
 数据层（M1，已落地）：
 
 - `tools/gen_fixtures.py` — 生成 F1–F6 合成破损 fixture（`--check` 位级一致、`--only` 部分运行）
 - `tools/fetch_fonts.py` — 校验 / 下载 `data/fonts.lock` 登记的 OFL 字体（默认 `--check` 离线）
+
+发布门（M6，已落地）：
+
+- `tools/check_release.py` — 发布终态门：`--pre-tag`（tag 前，只落仓库内文件）/ 离线（默认，
+  tag 后校验本地 tag 与 `dist/`）/ `--online`（唯一联网档：仓库公开性、远端 tag、Release 产物、
+  push 数 = 工作流运行数）
+
+## 发布（v0.1.0）
+
+- **仓库**：<https://github.com/yuluo554/subsetaudit>（公开）
+- **tag / Release**：`v0.1.0`，Release 附产物（sdist + wheel，含 sha256）见 `plan/RELEASE-M6.md`
+- **报告样例**：`docs/report-sample.json`（用现行实现现跑：F6 `codepage-mismatch` 源 + 产物 + `--text "汉字"`）
+- **发布留档**：`plan/RELEASE-M6.md`（tag 前事实 / tag 后追加事实分栏 + 阶段 7 覆盖对账）
+- **CI**：`.github/workflows/ci.yml`——矩阵 `ubuntu-latest`/`windows-latest` × Python `3.8`/`3.12`，
+  先跑三道门再装包再跑测试与冒烟
 
 ## 文档
 

@@ -1,0 +1,294 @@
+{
+  "schema": "subsetaudit/report@1",
+  "disclaimer": "技术判定，不是法律意见；每条结论可回指 spec_ref 或实测证据。",
+  "tool": {
+    "name": "subsetaudit",
+    "version": "0.1.0",
+    "fonttools_version": "4.57.0"
+  },
+  "inputs": {
+    "source": "source.ttf",
+    "subset": "subset.ttf"
+  },
+  "summary": {
+    "fsType": "0x0000",
+    "os2_version": 4,
+    "permission_bits": "0x0000",
+    "permission_name": "Installable",
+    "permission_resolution": "direct",
+    "conclusions": {
+      "embed_pdf": {
+        "value": true,
+        "spec_ref": "MS-OS2 §fsType bits0-3 (0/4/8 allow document embedding)"
+      },
+      "embed_app": {
+        "value": true,
+        "spec_ref": "MS-OS2 §fsType value 0 (permanent installation)"
+      },
+      "embed_web": {
+        "value": true,
+        "spec_ref": "MS-OS2 §fsType bits0-3 + bit8 (temporary loading for viewing, no subsetting)"
+      },
+      "may_subset": {
+        "value": true,
+        "spec_ref": "MS-OS2 §fsType bit8 (No subsetting)"
+      },
+      "may_modify": {
+        "value": true,
+        "spec_ref": "MS-OS2 §fsType bits0-3 (editing permitted / read-only)"
+      }
+    },
+    "violations": [],
+    "metadata": {
+      "spec_ref": "data/README §6.9",
+      "name": {
+        "present": [
+          0
+        ],
+        "missing": [
+          7,
+          11,
+          13,
+          14,
+          16,
+          17
+        ],
+        "required_ids": [
+          0,
+          7,
+          11,
+          13,
+          14,
+          16,
+          17
+        ],
+        "classification": {
+          "default_stripped": [
+            13,
+            14
+          ],
+          "author_absent": [
+            7,
+            11,
+            16,
+            17
+          ],
+          "unclassified": []
+        },
+        "classification_source": "source",
+        "source_present": true,
+        "languages": {
+          "subset": [
+            1033
+          ],
+          "source": [
+            0,
+            1033
+          ]
+        },
+        "language_count": {
+          "subset": 1,
+          "source": 2
+        }
+      },
+      "codepage": {
+        "ulCodePageRange1": "0x00000001",
+        "ulCodePageRange2": "0x00000000",
+        "bits": [
+          0
+        ],
+        "judged_bits": [
+          0
+        ],
+        "detail": [
+          {
+            "bit": 0,
+            "judged": true,
+            "hits": 0,
+            "ranges_known": true
+          }
+        ]
+      },
+      "unicode_range": {
+        "declared": [
+          59
+        ],
+        "over_declared": [],
+        "under_declared": [],
+        "declared_empty": false
+      },
+      "unicode_range_unknown_bits": [],
+      "maxp": {
+        "numGlyphs": 3,
+        "measured": 3,
+        "match": true
+      },
+      "char_index": {
+        "usFirstCharIndex": "0x5B57",
+        "usLastCharIndex": "0x6C49",
+        "measured_min": "U+5B57",
+        "measured_max": "U+6C49",
+        "judged": true
+      },
+      "codepoints_total": 2
+    },
+    "required": {
+      "count": 2,
+      "blocks": {
+        "BMP": 2,
+        "ExtA": 0,
+        "ExtB+": 0,
+        "other": 0
+      }
+    },
+    "coverage": {
+      "OK": [
+        "U+5B57",
+        "U+6C49"
+      ],
+      "MISSING_IN_SOURCE": [],
+      "LOST_IN_SUBSET": [],
+      "counts": {
+        "OK": 2,
+        "MISSING_IN_SOURCE": 0,
+        "LOST_IN_SUBSET": 0
+      },
+      "blocks": {
+        "OK": {
+          "BMP": 2,
+          "ExtA": 0,
+          "ExtB+": 0,
+          "other": 0
+        },
+        "MISSING_IN_SOURCE": {
+          "BMP": 0,
+          "ExtA": 0,
+          "ExtB+": 0,
+          "other": 0
+        },
+        "LOST_IN_SUBSET": {
+          "BMP": 0,
+          "ExtA": 0,
+          "ExtB+": 0,
+          "other": 0
+        }
+      }
+    },
+    "closure": {
+      "added": [],
+      "added_codepoints": 0,
+      "missing_in_source": 0,
+      "lost_in_subset": 0
+    },
+    "fallback_hint": [],
+    "cmap": {
+      "source_chosen": [
+        [
+          3,
+          1,
+          4,
+          5
+        ]
+      ],
+      "source_subtables": [
+        [
+          0,
+          3,
+          4,
+          5
+        ],
+        [
+          3,
+          1,
+          4,
+          5
+        ]
+      ],
+      "subset_chosen": [
+        [
+          3,
+          1,
+          4,
+          2
+        ]
+      ],
+      "subset_subtables": [
+        [
+          0,
+          3,
+          4,
+          2
+        ],
+        [
+          3,
+          1,
+          4,
+          2
+        ]
+      ]
+    },
+    "strict_source": false,
+    "subset_present": true,
+    "modules": [
+      "license-gate",
+      "metadata",
+      "layout-survival",
+      "coverage-diff"
+    ],
+    "error": 1,
+    "warn": 2,
+    "note": 0,
+    "skipped": 1
+  },
+  "findings": [
+    {
+      "module": "metadata",
+      "code": "CODEPAGE_CLAIMS_LATIN1_WITHOUT_COVERAGE",
+      "severity": "error",
+      "primary_key": "cp1:latin1",
+      "message": "ulCodePageRange1 bit0 声明支持 Latin-1，但 cmap 里没有任何 U+0000–U+00FF 码位（fontTools 的 recalcCodePageRanges 在无码页可用时回退置 bit0）",
+      "evidence": {
+        "ulCodePageRange1": "0x00000001",
+        "claims_latin1": true,
+        "latin1_codepoints": 0,
+        "codepoints_total": 2
+      },
+      "spec_ref": "fontTools O_S_2f_2.recalcCodePageRanges"
+    },
+    {
+      "module": "metadata",
+      "code": "NAME_LICENSE_DESCRIPTION_STRIPPED",
+      "severity": "warn",
+      "primary_key": "nameID13",
+      "message": "原字体有 nameID 13，产物里没有（默认 name_IDs 白名单把它剥掉了）",
+      "evidence": {
+        "nameID": 13,
+        "source_present": true,
+        "subset_present": false,
+        "classification": "default_stripped"
+      },
+      "spec_ref": "MS-NAME nameID13"
+    },
+    {
+      "module": "metadata",
+      "code": "NAME_LICENSE_INFO_URL_STRIPPED",
+      "severity": "warn",
+      "primary_key": "nameID14",
+      "message": "原字体有 nameID 14，产物里没有（默认 name_IDs 白名单把它剥掉了）",
+      "evidence": {
+        "nameID": 14,
+        "source_present": true,
+        "subset_present": false,
+        "classification": "default_stripped"
+      },
+      "spec_ref": "MS-NAME nameID14"
+    }
+  ],
+  "skipped": [
+    {
+      "module": "layout-survival",
+      "reason": "no_layout_tables",
+      "detail": "source: 无 GSUB/GPOS；subset: 无 GSUB/GPOS"
+    }
+  ]
+}

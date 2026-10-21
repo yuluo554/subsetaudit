@@ -115,8 +115,9 @@ def test_gates_are_stdlib_only_so_they_run_before_install():
 
     allowed = {"__future__", "io", "os", "re", "sys", "json", "hashlib", "subprocess",
                "shutil", "argparse", "struct", "unicodedata", "zipfile", "tempfile",
-               "textwrap", "collections", "itertools", "errno"}
-    for name in ("check_sprint_layout.py", "check_desensitized.py", "verify_gates.py"):
+               "textwrap", "collections", "itertools", "errno", "ast"}
+    for name in ("check_sprint_layout.py", "check_desensitized.py", "verify_gates.py",
+                 "check_release.py"):
         path = os.path.join(REPO_ROOT, "tools", name)
         tree = ast.parse(io.open(path, "r", encoding="utf-8").read())
         mods = set()
