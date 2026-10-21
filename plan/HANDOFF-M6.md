@@ -22,13 +22,14 @@
 | **M6 版本 / 许可** | ✅ | `0.1.0` 三处一致；`LICENSE`=MIT License 与 `pyproject.toml` 的 `license = { text = "MIT" }` 一致 |
 | **M6 报告样例** | ✅ | `docs/report-sample.json` 用现行实现现跑（F6 源+产物+`--text "汉字"`，rc=1） |
 | **M6 干净环境** | ✅ | 新 venv `pip install -e ".[dev]"` → `--version` + 五子命令 `--help` + 三条 README 场景真敲通过；**wheel 单独安装**亦可用 |
-| **M6 tag / Release** | ✅ | tag `v0.1.0` → `a6bb715`；公开仓库 + Release（2 产物，sha256 记入 `plan/RELEASE-M6.md` §二） |
-| **M6 CI 实跑** | ✅ | 四格全绿：`main` run `39523508174` / tag run `39523529638`；`--online` 的 push 数 = run 数对账通过 |
+| **M6 tag / Release** | ✅ | tag `v0.1.0` → `beba2d3`（第 4 次切；3 次重切的原因逐条记在留档）；公开仓库 + Release（2 产物，sha256 与字节数记入 `plan/RELEASE-M6.md` §二） |
+| **M6 CI 实跑** | ✅ | 四格全绿：`main` run `39524912868` / tag run `39524926846`；`--online` 的 push 数 = run 数对账通过 |
 | **M6 发布留档** | ✅ | `plan/RELEASE-M6.md` 两栏 + 阶段 7 覆盖对账（11 行：实现/不适用）+ 首推红的如实记录 |
 
 ## 二、当前事实·状态不变量（发布之后；动任何东西前必须知道）
 
-1. **`v0.1.0` 已冻结在提交 `a6bb715`**。交付面 = `src/` + `tests/` + `tools/` + `data/` +
+1. **`v0.1.0` 已冻结在提交 `beba2d3`**（第 4 次切；前三次重切的原因见 `plan/RELEASE-M6.md` §二）。
+   交付面 = `src/` + `tests/` + `tools/` + `data/` +
    `docs/report-sample.json` + `LICENSE` + `pyproject.toml` + `README.md`。
    **改交付面 = 让 tag 撒谎**：要么不动，要么**重切 tag**（删远端 Release/tag → 重打 → 重建产物 →
    sha256 同步进 `plan/RELEASE-M6.md` §二），并把重切原因如实写进留档。
@@ -162,8 +163,11 @@ CI 里一律 `python` 不用 `py`；Git Bash 会把 `/xxx` 改写成 `D:/program
 - **CI 上 6 个 OFL 真实字体用例是 SKIP**（`data/fonts/` 未下载）：`-rs` 显示的跳过原因是
   "data/fonts 未下载（离线环境）"。**不要把"278/280 passed"读成"全部验过"**。
 - **留档里的数字必须当场量，记忆不是证据**：发布留档初稿把产物字节数写成凭记忆的
-  `100,072 / 47,979`，真实值是 `101,219 / 47,823`（sha256 一直是对的，所以只有"当场 `getsize`
-  回取对账"能抓出来）。⇒ 写"字节数 / run id / sha256"前，**先跑一次命令把回显贴进去**。
+  `100,072 / 47,979`，当次实测值是 `101,219 / 47,823`（sha256 一直是对的，所以只有"当场
+  `getsize` + 回取对账"能抓出来；最终 tag 的产物又是另一组：`101,608 / 48,041`）。
+  ⇒ 写"字节数 / run id / sha256"前，**先跑一次命令把回显贴进去**；**每次重切都要重新量**。
+- **重切 tag 前把交付面通读一遍**：第 4 次重切的原因不是代码错，而是 README / AGENTS.md 里
+  留着过期文字（"两道门 / 16 组"、缺发布门命令）。**过期文字和错代码一样会让 tag 失真**。
 
 ## 六、DoD 逐项 checklist（M6）
 
