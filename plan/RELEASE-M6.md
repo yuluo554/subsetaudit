@@ -46,8 +46,14 @@
 
 | 产物 | 字节 | sha256 |
 |---|---|---|
-| `subsetaudit-0.1.0.tar.gz` | 100,072 | `d55508818488a2dfeaf54fa026d5038a8bbda246db4b50948f8b6587a5c175ae` |
-| `subsetaudit-0.1.0-py3-none-any.whl` | 47,979 | `b7db60c565e7e82677d92068a83609fead700130871d2eb9f6316014ed7fa84a` |
+| `subsetaudit-0.1.0.tar.gz` | 101,219 | `d55508818488a2dfeaf54fa026d5038a8bbda246db4b50948f8b6587a5c175ae` |
+| `subsetaudit-0.1.0-py3-none-any.whl` | 47,823 | `b7db60c565e7e82677d92068a83609fead700130871d2eb9f6316014ed7fa84a` |
+
+> **字节数是实测的**（`os.path.getsize`）。**对账做法**：`gh release download v0.1.0` 取回远端资产 →
+> `sha256sum` 与本地 `dist/` 逐个比对 → **两者逐字节相同**（否则"Release 附产物"只证明了"传了个文件"）。
+> 本文件这里**改过一次**：初稿把字节数写成了**凭记忆的数字**（100,072 / 47,979），与真实值
+> （101,219 / 47,823）不符 —— 被上面这套对账抓出来并更正。**教训：留档里的数字必须当场量，
+> 记忆不是证据。**
 
 两个产物都用 `py -m build --no-isolation` 从**冻结提交**（`a6bb715`）现场构建；sdist 与 wheel 里
 **零字体二进制**（`.ttf/.otf/.ttc/.woff/.woff2` 各 0 个），wheel 内含 `LICENSE` 与
