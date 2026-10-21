@@ -33,14 +33,13 @@ jobs:
           python-version: ${{ matrix.python }}
 
       # 注意：用 `python` 而不是 `py`——`py` 是 Windows 专用启动器，ubuntu runner 上没有。
+      # 这两道门**顶层只用标准库**，刻意放在 install 之前：它们要能在"干净 checkout、什么都没装"
+      # 时跑（`tests/test_ci_workflow.py::test_gates_are_stdlib_only...` 钉住）。
       - name: "Sprint layout gate (methodology binding)"
         run: python tools/check_sprint_layout.py
 
       - name: "Desensitization gate (no host paths / usernames / local proxy)"
         run: python tools/check_desensitized.py
-
-      - name: "Gate mutation verification (every judging rule must be falsifiable)"
-        run: python tools/verify_gates.py
 
       - name: "Install (editable) with dev extras"
         run: |
@@ -49,11 +48,22 @@ jobs:
 
       # M1 数据层：产物不入仓 → CI 里必须先全量生成，再做位级比对。
       # 生成期自证（独立 oracle）在 `gen_fixtures.py` 内部，任何不符直接 exit 1。
+      # **必须早于"变异验证"与"发布门"**：两者都会复跑 `gen_fixtures.py --check`，
+      # 而 `--check` 是比较"重生成"与"仓库产物"—— 产物不存在时它只会报缺失。
       - name: "Fixtures — generate F1-F6 (with built-in independent oracle)"
         run: python tools/gen_fixtures.py
 
       - name: "Fixtures — bit-level reproducibility (--check)"
         run: python tools/gen_fixtures.py --check
+
+      # 变异验证放在 install **之后**：它现在会连**发布门**一起跑，而发布门要复跑
+      # `gen_fixtures.py --check`（需要 fontTools，且要有产物）。脚本自身仍是 stdlib-only
+      # （发布门用 AST 静态解析 cli.py，不 import 包）—— 依赖来自它编排的被测门，
+      # 不是它自己的 import（`tests/test_ci_workflow.py` 两处断言分别钉这两件事）。
+      # 实测背景（2026-10-21 首推）：放在 install 之前 → 四格子同红，且红在
+      # `RELEASE.FIXTURES_BITWISE gen_fixtures --check rc=1 ModuleNotFoundError: fontTools`。
+      - name: "Gate mutation verification (every judging rule must be falsifiable)"
+        run: python tools/verify_gates.py
 
       # `--check` 必须**离线可跑**：CI 没有下载 OFL 字体 → 期望 exit 1 且逐条报 MISSING，
       # 但**不得**抛 traceback（"缺文件报 MISSING 而不是崩"是 M1 的 DoD）。

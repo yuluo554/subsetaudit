@@ -21,7 +21,12 @@ classifiers = [
 dependencies = ["fonttools>=4.40,<5"]
 
 [project.optional-dependencies]
-dev = ["pytest>=7,<9"]
+# `PyYAML` 是 `tests/test_ci_workflow.py` 的**唯一**用途：那组测试解析 `.github/workflows/ci.yml`
+# 断言"门/夹具/发布门的步骤顺序"。它本地常因 pyyaml 恰好在场而跑、在 CI 里却因缺依赖被
+# `pytest.importorskip("yaml")` 整模块跳过 —— 于是"CI 顺序被写错"这类缺陷在 CI 里**无人看守**。
+# 2026-10-21 M6 首推实测：正是这个盲区让"变异验证排在 install 之前"的错序溜进了远端（四格子同红）。
+# 既然这组测试的判据就是 CI 顺序，就必须保证它在 CI 里真的跑起来 → 显式声明依赖。
+dev = ["pytest>=7,<9", "PyYAML>=5.4"]
 
 [project.scripts]
 subsetaudit = "subsetaudit.cli:main"

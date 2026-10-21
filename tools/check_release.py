@@ -411,25 +411,85 @@ def remote_checks(tag, version):
             "Release %s assets=%d" % (tag, len(assets)) if ok
             else "Release %s 缺产物或仍是草稿（assets=%d）" % (tag, len(assets)))
 
-    # 推送数 = 工作流运行数（`plan/05` M6 的"push 数 = run 数对账"）
-    rc, out = _gh(["run", "list", "--event", "push", "--limit", "200", "--json", "databaseId"])
+    _parity_checks(tag)
+
+
+def _pushed_refs():
+    """远端实际存在的 ref → 提交 sha（annotated tag 取 peeled 提交）。
+
+    为什么不用 `git rev-list --count HEAD`：**那是提交数，不是推送数**。
+    "push 数 = run 数对账"（`plan/05` M6）要的是"每次推送都真的触发了工作流"——
+    判据 = **每一个已推送的 ref（分支/tag）都必须有对应的 push 事件运行**。
+    远端 ref 清单只有 `git ls-remote` 给得出（GitHub 的 events/activity API 对新仓库
+    会返回空/滞后 → 不能当独立源）。
+    """
+    rc, out = _run(["git", "ls-remote", "--heads", "--tags", "origin"])
     if rc != 0:
-        add("RELEASE.PUSH_RUN_PARITY", False, "gh run list 失败: %s" % out.strip()[:160])
+        return None, out.strip()[:160]
+    refs = {}
+    for line in out.split("\n"):
+        parts = line.split()
+        if len(parts) != 2:
+            continue
+        sha, ref = parts
+        if ref.endswith("^{}"):  # 剥开 annotated tag → peeled 提交覆盖 tag 对象
+            refs[ref[:-3]] = sha
+        elif ref not in refs:
+            refs.setdefault(ref, sha)
+    return refs, None
+
+
+def _parity_checks(tag):
+    """"每个已推送的 ref 都有对应的 push 运行" + "最近一次运行为绿"（`plan/05` M6）。"""
+    refs, problem = _pushed_refs()
+    if problem is not None:
+        add("RELEASE.PUSH_RUN_PARITY", False, "git ls-remote origin 失败: %s" % problem)
         return
-    try:
-        runs = len(json.loads(out))
-    except ValueError:
-        add("RELEASE.PUSH_RUN_PARITY", False, "gh run list 不是 JSON")
+    if not refs:
+        add("RELEASE.PUSH_RUN_PARITY", False, "远端没有任何 ref（还没推？）")
         return
-    rc, out = _run(["git", "rev-list", "--count", "HEAD"])
-    pushes = int(out.strip()) if rc == 0 and out.strip().isdigit() else -1
-    capped = pushes > 200 or runs > 200
-    if capped:
-        add("RELEASE.PUSH_RUN_PARITY", True, "push=%d / run=%d（超分页上限，只作提示）"
-            % (pushes, runs), status="skip")
+    target = "refs/tags/%s" % tag
+    if target not in refs:
+        add("RELEASE.PUSH_RUN_PARITY", False, "远端缺 %s（先 `git push origin %s`）" % (target, tag))
         return
-    add("RELEASE.PUSH_RUN_PARITY", pushes == runs,
-        "push=%d / run=%d" % (pushes, runs))
+    missing, running, red, green = [], [], [], []
+    for ref in sorted(refs):
+        sha = refs[ref]
+        rc, out = _gh(["run", "list", "--commit", sha, "--limit", "20",
+                       "--json", "event,status,conclusion"])
+        if rc != 0:
+            add("RELEASE.PUSH_RUN_PARITY", False, "gh run list --commit %s 失败: %s"
+                % (sha[:8], out.strip()[:120]))
+            return
+        try:
+            runs = [r for r in json.loads(out) if r.get("event") == "push"]
+        except ValueError:
+            add("RELEASE.PUSH_RUN_PARITY", False, "gh run list 不是 JSON")
+            return
+        if not runs:
+            missing.append("%s@%s" % (ref, sha[:8]))
+            continue
+        latest = runs[0]  # `gh run list` 按新→旧返回 → 首条即最近一次
+        if latest.get("status") != "completed":
+            running.append(ref)
+            continue
+        (green if latest.get("conclusion") == "success" else red).append(ref)
+    if missing:
+        add("RELEASE.PUSH_RUN_PARITY", False,
+            "这些已推送的 ref 没有对应运行（推送没触发 CI？）: %s" % ",".join(missing))
+        return
+    detail = ("远端 refs=%d；均有 push 运行（绿 %d）；%s"
+              % (len(refs), len(green), tag))
+    if red:
+        add("RELEASE.PUSH_RUN_PARITY", False,
+            "最近一次运行非绿: %s｜%s" % (",".join(red), detail))
+        return
+    if running:
+        # 运行还没结束 → 结论未定，**显式 SKIP**（不许把"还在跑"当成"绿"）。
+        add("RELEASE.PUSH_RUN_PARITY", True,
+            "仍有运行未结束: %s｜%s" % (",".join(running), detail), status="skip")
+        return
+    add("RELEASE.PUSH_RUN_PARITY", True, "每个已推送 ref 的最近运行都成功｜" + detail)
 
 
 def _stdout():
