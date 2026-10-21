@@ -24,7 +24,7 @@
 | AGENTS.md | 仓库锚点：方法论名 + 布局门命令 + 强制布局 + 环境禁忌 | ✅ v1（M0） |
 | tools/check_sprint_layout.py | 布局门（9 判据） | ✅ v1（M0） |
 | tools/check_desensitized.py | 脱敏门（4 条规则） | ✅ v1（M0） |
-| tools/verify_gates.py | 两道门的变异验证常驻（16 组） | ✅ v1（M0，靶子随里程碑翻新） |
+| tools/verify_gates.py | **三道门**的变异验证常驻（24 组：布局 12 / 脱敏 4 / 发布 8） | ✅ v1（M6，靶子随里程碑翻新） |
 | tools/smoke_cli.py | 离线冒烟（11 条命令，含一条 exit 2 负向） | ✅ v1（M0/M4） |
 | tools/check_release.py | 发布终态门（`--pre-tag` / 离线 / `--online` 三档） | ✅ v1（M6） |
 | tools/gen_fixtures.py | F1–F6 合成破损 fixture 生成器（`--only` / `--check` / 独立 oracle 自证） | ✅ v1（M1） |
@@ -99,7 +99,7 @@
 
 | 里程碑 | 目标 | DoD（出口门） | 状态 |
 |---|---|---|---|
-| **M0 装订与骨架** | `AGENTS.md` + 两道门 + `plan/00–06` + 可运行五子命令骨架 | `py tools/check_sprint_layout.py` 全绿（16 组变异已验证）；`subsetaudit --help` 与五子命令可跑；`pip install -e .` 可用 | ✅ |
+| **M0 装订与骨架** | `AGENTS.md` + 两道门 + `plan/00–06` + 可运行五子命令骨架 | `py tools/check_sprint_layout.py` 全绿（当时的 16 组变异已验证；M6 已扩到 **24 组**）；`subsetaudit --help` 与五子命令可跑；`pip install -e .` 可用 | ✅ |
 | **M1 数据先行** | 6 类合成破损 fixture（F1–F6）+ OFL 字体回归套件 | `tools/gen_fixtures.py` 可重建全部 fixture；`tools/fetch_fonts.py --check` 校验 `fonts.lock` 哈希；每条 fixture 有 `expect.json` 与说明；**生成期自证**（用独立 oracle 复算计数与分类，不符即失败）；仓库内无任何字体二进制 | ✅ |
 | **M2 许可闸门** | `license-gate` | `0x000E`+v0 不误报、`0x0108` 判禁子集、v3 多位并存必报；每条结论带规范条款引用；F1/F2/F3 golden 逐项一致 | ✅ |
 | **M3 覆盖差集** | `coverage-diff` | 复现 `--text="汉字abc"` 静默丢字并判 `LOST_IN_SUBSET`；pdfcraft#381 字组"高频在、中频缺"指纹可复现；非 Unicode cmap 走 `SKIPPED`；F4 golden 一致 | ✅ |

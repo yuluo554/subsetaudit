@@ -29,11 +29,13 @@ py tools/check_desensitized.py     # 脱敏门；发布前与每次改文档后�
 ## 环境事实与禁忌（只写实测过的，带日期）
 
 - 2026-10-21 实测：`py -0p` 有 **3.8.8-64** 与 **3.12-64**；3.8 通道装了 fontTools **4.57.0**、pytest 7.4.4；3.12 通道**没有** fontTools（CI 里两条都装）。
-- 2026-10-21 实测：Node v24.15.0 在位（本项目的两道门仍用 Python 写，避免 CI 多一条运行时依赖）。
-- 用 `py` 不用 `python`（后者是商店占位符）；跑中文输出一律 `py -X utf8`。
+- 2026-10-21 实测：Node v24.15.0 在位（本项目的三道门仍用 Python 写，避免 CI 多一条运行时依赖）。
+- 用 `py` 不用 `python`（后者是商店占位符）；跑中文输出一律 `py -X utf8`（CI 侧 `python` + `PYTHONUTF8=1`）。
 - 本机代理与网络：`gh` 已登录 `yuluo554`（keyring，https）；`git push` 受阻时按"HTTPS 直连 → 本地代理 → 裸 SSH"顺序探测，**只对单条命令用 `-c http.proxy=`**，不改全局。
-- **禁止**：把"未执行"写成已完成；在 tag 之后改交付面；把商用字体（Arial/Calibri/msyh/seguiemj…）复制进仓库。
-- 入库文档**一律相对路径**；绝对路径只出现在用户侧启动命令里。
+  **2026-10-21 M6 实测**：本机 git 的 https 通道会整个连不上，而 `gh api` 一直可用 → 远端判据
+  （`tools/check_release.py --online`）**一律走 `gh api`**；推送走**一次性 SSH URL**，不改全局配置。
+- **禁止**：把"未执行"写成已完成；在 tag 之后改交付面（要改就**重切 tag** 并把原因写进 `plan/RELEASE-M6.md` §二）；把商用字体（Arial/Calibri/msyh/seguiemj…）复制进仓库。
+- 入库文档**一律相对路径**；绝对路径只出现在用户侧启动命令里。**脱敏门的扫描面 = 仓库内容**（`.gitignore` 里每条本地产物/环境目录都必须在 `tools/check_desensitized.py` 的 `SKIP_DIRS`/`SKIP_SUFFIXES` 里有对应项，否则假红）。
 
 ## 本项目的三条不可动摇的口径
 

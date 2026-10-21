@@ -257,7 +257,8 @@ subsetaudit report --source <source.ttf> --subset <subset.ttf> --text "abc" --fo
 # 门（每棒第一件事）
 py tools/check_sprint_layout.py     # 布局门（方法论装订）
 py tools/check_desensitized.py      # 脱敏门
-py tools/verify_gates.py            # 两道门的变异验证（16 组必须全红）
+py tools/verify_gates.py            # 三道门的变异验证（24 组必须全红后还原复绿）
+py tools/check_release.py --pre-tag # 发布终态门（tag 前；零网络，只落仓库内文件）
 
 # 测试（仓库根目录直接跑；tests/conftest.py 会把 src/ 放进路径，无需先安装）
 py -X utf8 -m pytest -q
@@ -270,9 +271,10 @@ py -X utf8 -m pytest -q
 
 发布门（M6，已落地）：
 
-- `tools/check_release.py` — 发布终态门：`--pre-tag`（tag 前，只落仓库内文件）/ 离线（默认，
-  tag 后校验本地 tag 与 `dist/`）/ `--online`（唯一联网档：仓库公开性、远端 tag、Release 产物、
-  push 数 = 工作流运行数）
+- `tools/check_release.py` — 发布终态门三档：`--pre-tag`（tag 前，只落仓库内文件、零网络）/
+  离线（默认，tag 后校验本地 tag 与 `dist/`）/ `--online`（**唯一联网档**：仓库公开性、远端 tag、
+  Release 附产物、push 数 = run 数对账 —— 口径是"**每个已推送的 ref 都有对应的 push 运行、
+  且最近一次结论为绿**"）
 
 ## 发布（v0.1.0）
 
@@ -280,8 +282,10 @@ py -X utf8 -m pytest -q
 - **tag / Release**：`v0.1.0`，Release 附产物（sdist + wheel，含 sha256）见 `plan/RELEASE-M6.md`
 - **报告样例**：`docs/report-sample.json`（用现行实现现跑：F6 `codepage-mismatch` 源 + 产物 + `--text "汉字"`）
 - **发布留档**：`plan/RELEASE-M6.md`（tag 前事实 / tag 后追加事实分栏 + 阶段 7 覆盖对账）
-- **CI**：`.github/workflows/ci.yml`——矩阵 `ubuntu-latest`/`windows-latest` × Python `3.8`/`3.12`，
-  先跑三道门再装包再跑测试与冒烟
+- **CI**：`.github/workflows/ci.yml`——矩阵 `ubuntu-latest`/`windows-latest` × Python `3.8`/`3.12`。
+  步骤次序（**顺序本身有测试钉住**，见 `tests/test_ci_workflow.py`）：布局门 → 脱敏门 → `pip install -e ".[dev]"`
+  → 生成 F1–F6 → 位级 `--check` → 变异验证（`verify_gates.py`，24 组）→ 离线锁文件 → README 安装路径实测
+  → 测试 → 冒烟 → 发布门 `--pre-tag`。首推后的四格全绿 run id 见 `plan/RELEASE-M6.md` §二
 
 ## 文档
 
