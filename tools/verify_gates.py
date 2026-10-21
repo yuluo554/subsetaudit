@@ -313,7 +313,7 @@ def _tree_hashes():
     import hashlib
 
     skip_dirs = {".git", "__pycache__", "_scratch", ".pytest_cache", ".venv", "venv",
-                 "build", "dist"}
+                 "build", "dist", ".venv-readme"}
     out = {}
     for dirpath, dirnames, filenames in os.walk(ROOT):
         dirnames[:] = [d for d in sorted(dirnames) if d not in skip_dirs]

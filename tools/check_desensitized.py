@@ -16,6 +16,13 @@
   ② 公开镜像不是私有代理（只认回环 / 私网）；
   ③ 门豁免自己，并把豁免份数打进结论行；worktree 里 `.git` 是文件不是目录，两态都跳过。
 退出码：0 零命中 / 1 有命中 / 2 用法错误。
+
+**扫描面 = 仓库内容，不是本地环境**：`SKIP_DIRS` 里每一项都是 `.gitignore` 已声明的
+本地产物/环境（`.venv`、`_scratch`、`build`、`dist`…）。判据是"入库文本里有没有本机
+痕迹"，把 gitignore 掉的虚拟环境扫进来只会产生假红 —— 2026-10-21 CI 实测到的正是这类：
+`README 安装路径实测`步骤在仓库根建 `.venv-readme/`，Windows 的 `Scripts/Activate.ps1`
+里带一条本机路径，而 `SKIP_DIRS` 当时没收它（M0 加那一步时漏了）。**新增本地产物目录时
+必须同步收编到这里**。
 """
 from __future__ import print_function
 
@@ -30,7 +37,12 @@ SELF = "tools/check_desensitized.py"
 SKIP_DIRS = {
     ".git", ".tmp", "dist", "dist-release", "node_modules", ".cache",
     ".venv", "venv", "build", "_scratch", "__pycache__",
+    # 2026-10-21 CI 实测补：README 安装路径步骤建 `.venv-readme/`（gitignore 已声明），
+    # 漏收时 Windows 格子会因 `.venv-readme/Scripts/Activate.ps1` 里的本机路径变红。
+    ".venv-readme",
 }
+#: 名字随包名变的本地安装产物（`src/subsetaudit.egg-info/` 由 `pip install -e .` 现生成）。
+SKIP_SUFFIXES = (".egg-info", ".dist-info")
 SKIP_EXTS = {
     ".png", ".jpg", ".jpeg", ".gif", ".ico", ".zip", ".gz", ".exe", ".dll",
     ".pdf", ".woff", ".woff2", ".ttf", ".otf", ".ttc", ".pyc",
@@ -49,13 +61,17 @@ RULES = [
 ]
 
 
+def _skip_dir(entry):
+    return entry in SKIP_DIRS or entry.endswith(SKIP_SUFFIXES)
+
+
 def walk(directory):
     for entry in sorted(os.listdir(directory)):
         path = os.path.join(directory, entry)
         if entry == ".git":  # 目录形态与 worktree 文件形态一起挡
             continue
         if os.path.isdir(path):
-            if entry in SKIP_DIRS:
+            if _skip_dir(entry):
                 continue
             for item in walk(path):
                 yield item

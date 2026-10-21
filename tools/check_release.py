@@ -415,27 +415,32 @@ def remote_checks(tag, version):
 
 
 def _pushed_refs():
-    """远端实际存在的 ref → 提交 sha（annotated tag 取 peeled 提交）。
+    """远端实际存在的 ref → 提交 sha（**只走 `gh api`**，不走 git 的网络传输）。
 
-    为什么不用 `git rev-list --count HEAD`：**那是提交数，不是推送数**。
-    "push 数 = run 数对账"（`plan/05` M6）要的是"每次推送都真的触发了工作流"——
-    判据 = **每一个已推送的 ref（分支/tag）都必须有对应的 push 事件运行**。
-    远端 ref 清单只有 `git ls-remote` 给得出（GitHub 的 events/activity API 对新仓库
-    会返回空/滞后 → 不能当独立源）。
+    两点设计：
+
+    * 不用 `git ls-remote origin`：那依赖 git 自己的 HTTPS 传输。本机实测（2026-10-21）
+      git 的 https 通道会连不上，而 `gh` 的 API 通道照常可用 —— 判据不能因为**传输方式**
+      而变红（那会把"网络抖动"报成"发布事实不对"）。远端事实统一从 gh 取。
+    * `repos/{owner}/{repo}/tags` 返回的是**剥开注解 tag 后的提交**（正是要比对的 sha），
+      所以不需要自己 dereference tag 对象。
     """
-    rc, out = _run(["git", "ls-remote", "--heads", "--tags", "origin"])
-    if rc != 0:
-        return None, out.strip()[:160]
     refs = {}
-    for line in out.split("\n"):
-        parts = line.split()
-        if len(parts) != 2:
-            continue
-        sha, ref = parts
-        if ref.endswith("^{}"):  # 剥开 annotated tag → peeled 提交覆盖 tag 对象
-            refs[ref[:-3]] = sha
-        elif ref not in refs:
-            refs.setdefault(ref, sha)
+    for endpoint, prefix in (("branches", "refs/heads/"), ("tags", "refs/tags/")):
+        rc, out = _gh(["api", "repos/{owner}/{repo}/%s" % endpoint, "--paginate", "--slurp"])
+        if rc != 0:
+            return None, "gh api %s 失败: %s" % (endpoint, out.strip()[:160])
+        try:
+            items = json.loads(out)
+        except ValueError:
+            return None, "gh api %s 不是 JSON" % endpoint
+        if items and isinstance(items[0], list):  # `--slurp` 把每页包成一层数组
+            items = [item for page in items for item in page]
+        for item in items:
+            name = item.get("name")
+            sha = (item.get("commit") or {}).get("sha")
+            if name and sha:
+                refs[prefix + name] = sha
     return refs, None
 
 
