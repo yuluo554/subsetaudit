@@ -210,16 +210,6 @@ RELEASE_ARGS = ("--pre-tag",)
 GATE_ARGS = {RELEASE: RELEASE_ARGS}
 
 
-def _offline_args():
-    """离档案（默认档）—— 给只在该档存在的判据当变异参数。
-
-    `RELEASE.SHA256SUMS` / `RELEASE.DIST_ARTIFACTS` / `RELEASE.TAG_EXISTS` 都活在
-    tag 之后的档位里（`dist/` 与 tag 是发布棒产物）；`--pre-tag` 不跑它们，
-    所以拿 `RELEASE_ARGS` 当参数会得到"判据根本没跑"的假绿。
-    """
-    return ()
-
-
 def _corrupt_sha256sums():
     """把 `dist/SHA256SUMS` 里第一条摘要的首字符改掉 → `RELEASE.SHA256SUMS` 必须红。
 
@@ -344,11 +334,11 @@ MUTATIONS = [
     ("R7", "删发布留档的覆盖对账整节", RELEASE, "RELEASE.RELEASE_DOC",
      lambda: _replace_once("plan/RELEASE-M6.md", "## 三、阶段 7 覆盖对账", "## 三、其它"),
      RELEASE_ARGS),
-    # R9 用 `_offline_args()`：这条判据只活在**离线/联网**档（`dist/` 是 tag 后才存在），
-    # 所以靶子必须配上正确的档位参数，否则会因"根本没跑这条判据"而假绿。
+    # R9 走 `RELEASE_ARGS`（pre-tag 档）：`RELEASE.SHA256SUMS` 就在那一档（见 D-M7-2）。
+    # CI 不构建 `dist/`，那时这条变异会显式 SKIP（不是 FAIL、也不冒充通过）。
     ("R9", "把 dist/SHA256SUMS 里的一条摘要改错（附件过期仍声称可校验）", RELEASE,
      "RELEASE.SHA256SUMS",
-     lambda: _corrupt_sha256sums(), _offline_args()),
+     lambda: _corrupt_sha256sums(), RELEASE_ARGS),
     ("R8", "往 PENDING_TOOLS 塞一条已 ✅ 里程碑名下的过期登记", RELEASE,
      "RELEASE.PENDING_TOOLS_CLEARED",
      lambda: _replace_once("tools/check_sprint_layout.py", "PENDING_TOOLS = {}",

@@ -325,12 +325,17 @@ def check_release_doc(done, all_milestones):
         cols = bool(re.search(r"^##\s*一、tag 前事实", release, re.M)) and bool(
             re.search(r"^##\s*二、tag 后追加", release, re.M)
         )
-        heading = bool(re.search(r"^#{2,3}.*覆盖对账", release, re.M))
+        # **锚到 §三 本身**，不用 `^#{2,3}.*覆盖对账` 这种通用词。
+        # 2026-10-23 CI 实测：v0.1.1 留档追加进同一文件后，文件里出现**两个**
+        # 「覆盖对账」小节（§三 与 v0.1.1 的 §六），通用正则仍真 → 删掉 §三 标题
+        # 也不再变红（L6/R7 变异报 MISS）。判据范围过宽 = 假门，收窄到发布里程碑那一节的
+        # 精确标题（这是**变严**：它现在要求"§三 阶段 7 覆盖对账"真的还在）。
+        heading = bool(re.search(r"^##\s*三、阶段 7 覆盖对账", release, re.M))
         rows = len(re.findall(r"^\|.*(实现|不适用|待首推).*\|$", release, re.M))
         add(
             "LAYOUT.RELEASE",
             cols and heading and rows >= 3,
-            "两栏:%s 覆盖对账小节:%s 三态行数:%d" % (cols, heading, rows),
+            "两栏:%s 覆盖对账小节(§三):%s 三态行数:%d" % (cols, heading, rows),
         )
         return
     add("LAYOUT.RELEASE", True, "WRAPUP 形态")

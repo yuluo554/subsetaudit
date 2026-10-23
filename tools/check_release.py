@@ -304,17 +304,22 @@ def check_fixtures_bitwise():
 
 
 def check_release_doc():
-    """`plan/RELEASE-M6.md` 两栏 + 覆盖对账小节 + 三态行（与布局门 LAYOUT.RELEASE 同口径）。"""
+    """`plan/RELEASE-M6.md` 两栏 + **§三 阶段 7 覆盖对账** + 三态行（与布局门同口径）。
+
+    标题判据锚到 §三 的**精确文本**，不用 `^#{2,3}.*覆盖对账` 这种通用词：
+    2026-10-23 CI 实测，v0.1.1 的留档追加进同一文件后文件里有两个「覆盖对账」小节，
+    通用正则仍真 → 删掉 §三 标题的变异不再变红（R7 MISS）。收窄 = 变严。
+    """
     text = read(RELEASE_DOC)
     if text is None:
         add("RELEASE.RELEASE_DOC", False, "缺 %s（发布三件套之一）" % RELEASE_DOC)
         return
     cols = bool(re.search(r"^##\s*一、tag 前事实", text, re.M)) and bool(
         re.search(r"^##\s*二、tag 后追加", text, re.M))
-    heading = bool(re.search(r"^#{2,3}.*覆盖对账", text, re.M))
+    heading = bool(re.search(r"^##\s*三、阶段 7 覆盖对账", text, re.M))
     rows = len(re.findall(r"^\|.*(实现|不适用|待首推).*\|$", text, re.M))
     add("RELEASE.RELEASE_DOC", cols and heading and rows >= 3,
-        "两栏:%s 覆盖对账:%s 三态行:%d" % (cols, heading, rows))
+        "两栏:%s §三覆盖对账:%s 三态行:%d" % (cols, heading, rows))
 
 
 def check_pending_tools_cleared():
@@ -343,7 +348,32 @@ def pre_tag_checks():
     check_fixtures_bitwise()
     check_release_doc()
     check_pending_tools_cleared()
+    check_sha256sums_if_built(version)
     return version
+
+
+def check_sha256sums_if_built(version):
+    """`dist/SHA256SUMS` 的内容校验，**放在 pre-tag 档**（决策 D-M7-2）。
+
+    为什么放这一档而不是 `dist_checks`（tag 后）：
+      · `dist/` 是**发布棒在 tag 之前**构建的（`py -m build --no-isolation` 要跑在打 tag 前），
+        所以"附件对不对"必须在**打 tag 前**就判掉，否则错了只能重切 tag；
+      · CI 不构建 `dist/`（它不做发布），因此这里**没有 dist/ 时显式 SKIP**，
+        而不是 FAIL —— CI 不该因为"本地没构建产物"变红。
+    SKIP 是可见的三态之一（`status="skip"`），不计入 FAIL，也不冒充通过。
+    """
+    dist = os.path.join(ROOT, "dist")
+    artifacts = []
+    if os.path.isdir(dist):
+        names = sorted(os.listdir(dist))
+        artifacts = [n for n in names
+                     if version in n and n.endswith((".whl", ".tar.gz"))]
+    if not artifacts:
+        add("RELEASE.SHA256SUMS", True,
+            "dist/ 未构建（本机未跑 `py -m build`；CI 不构建产物）→ 本判据不适用",
+            status="skip")
+        return
+    _check_sha256sums(dist, artifacts)
 
 
 # ── 段二：tag 之后（离线）────────────────────────────────────────────────────
@@ -383,7 +413,6 @@ def dist_checks(version):
     for name in sdist + wheel:
         lines.append("%s sha256:%s" % (name, _sha256(os.path.join(dist, name))[:16]))
     add("RELEASE.DIST_ARTIFACTS", True, "；".join(lines))
-    _check_sha256sums(dist, sdist + wheel)
 
 
 def _check_sha256sums(dist, artifacts):
