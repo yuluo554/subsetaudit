@@ -178,7 +178,7 @@ CI 里一律 `python` 不用 `py`；Git Bash 会把 `/xxx` 改写成 `D:/program
 - [x] `py tools/verify_gates.py` 全部符合预期（**M6 时 24 项 → v0.1.1 起 25 项、0 SKIP**；L4/L9 靶子已按 §二.4 处理）
 - [x] `py tools/gen_fixtures.py --check` 位级一致（22 个文件）
 - [x] `py tools/smoke_cli.py` 11 条 0 失败
-- [x] 双解释器测试全绿（3.8 全局 / 3.12 venv，**M6 时 280 项 → v0.1.1 起 300 项**；各 6 项 OFL 用例 SKIP，如实标注）。⚠ 计数本身见 `plan/05` 的「全量 **N 项**」，由 `tests/test_self_counts.py` 与实测动态对账
+- [x] 双解释器测试全绿（3.8 全局 / 3.12 venv；各 6 项 OFL 用例 SKIP，如实标注）。⚠ **不在此写死条数** —— 全量数见 `plan/05` 的「全量 **N 项**」，由 `tests/test_self_counts.py` 与 `pytest --collect-only` 实测**动态对账**（M6 时点曾是 280，其后按迭代增长）
 - [x] `tools/check_release.py` 落位并从 `PENDING_TOOLS` 删除（`PENDING_TOOLS` 现为 `{}`）
 - [x] `LICENSE`（MIT）与 `pyproject.toml` license 字段一致
 - [x] 版本三处一致（`__init__` / `pyproject.toml` / README 状态行 = `0.1.0`）

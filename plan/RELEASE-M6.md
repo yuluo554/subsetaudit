@@ -159,7 +159,7 @@ install → 生成 fixture → 位级 `--check` → 变异验证 → 离线锁�
 | README 最小复现 | 7 条命令全是真实路径，且每条标注 `rc=N` | `tests/test_readme_scenarios.py` 真跑子进程，退出码与标注一致；变异自证（改坏路径 → 4 条红） |
 | 测试数自证 | `plan/05` 的「全量 **N 项**」与实测对账 | `tests/test_self_counts.py`（动态取 `--collect-only` 真值，不硬编码） |
 | CI action 版本 | `actions/checkout@v7` / `actions/setup-python@v7` | `tests/test_ci_workflow.py::test_ci_actions_are_on_v7_or_newer`（判 ≥v7，升 v8 不红） |
-| 测试（双解释器） | 3.12 → **300 passed**；3.8 → 见 §五 | `pytest -o addopts=""`（`addopts="-q"` 下再加 `-q` 会吞掉汇总行） |
+| 测试（双解释器） | 3.12 → **303 passed**；3.8 → 见 §五 | `pytest -o addopts=""`（`addopts="-q"` 下再加 `-q` 会吞掉汇总行）；计数由 `test_self_counts.py` 与实测对账 |
 | 四道门 | 布局 / 脱敏 / 发布全绿，变异 **25 项 25 符合预期、0 SKIP** | `verify_gates.py`（R9 为本版新增：改错 SHA256SUMS 一条摘要 → `RELEASE.SHA256SUMS` 必红）；组数由 `tests/test_self_counts.py` 与实测对账 |
 | `SHA256SUMS` | `dist/SHA256SUMS` 覆盖 sdist + wheel，逐条与文件摘要相符 | `RELEASE.SHA256SUMS`（v0.1.1 新增判据，决策 D-M7-2）|
 | 无字体二进制入库 | `git ls-files` 0 个字体二进制 | `RELEASE.NO_FONT_BINARIES` |
@@ -178,7 +178,7 @@ install → 生成 fixture → 位级 `--check` → 变异验证 → 离线锁�
 | `tests/test_ci_workflow.py` | 新增一条 `≥v7` 判据 | 变异自证：改回 v4 → 红 |
 | `tools/check_release.py` | `SAMPLE_JSON` 加"禁环境字段"否定断言；新增 `RELEASE.SHA256SUMS` | `verify_gates.py` R3/R9 |
 | `tools/check_desensitized.py` | `SKIP_DIRS` 收编 `update/` | 脱敏门自身（扫 75 文件 0 命中） |
-| `tools/verify_gates.py` | R1/R3 靶子改 `current_version()` 动态取值；新增 R9 | 自身（26 项全符合预期） |
+| `tools/verify_gates.py` | R1/R3 靶子改 `current_version()` 动态取值；新增 R9 | 自身（25 项全符合预期；组数由 `tests/test_self_counts.py` 与实测对账） |
 | `.github/workflows/ci.yml` | `checkout@v4→v7`、`setup-python@v5→v7`（步骤名/次序未动） | `test_ci_workflow.py` 12 条原有断言仍绿 |
 | `.gitignore` | 加 `update/` | 第 0 批卫生 |
 
