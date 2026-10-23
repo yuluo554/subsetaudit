@@ -160,7 +160,7 @@ install → 生成 fixture → 位级 `--check` → 变异验证 → 离线锁�
 | 测试数自证 | `plan/05` 的「全量 **N 项**」与实测对账 | `tests/test_self_counts.py`（动态取 `--collect-only` 真值，不硬编码） |
 | CI action 版本 | `actions/checkout@v7` / `actions/setup-python@v7` | `tests/test_ci_workflow.py::test_ci_actions_are_on_v7_or_newer`（判 ≥v7，升 v8 不红） |
 | 测试（双解释器） | 3.12 → **300 passed**；3.8 → 见 §五 | `pytest -o addopts=""`（`addopts="-q"` 下再加 `-q` 会吞掉汇总行） |
-| 四道门 | 布局 / 脱敏 / 发布全绿，变异 **26 项 26 符合预期、0 SKIP** | `verify_gates.py`（R9 为本版新增：改错 SHA256SUMS 一条摘要 → `RELEASE.SHA256SUMS` 必红） |
+| 四道门 | 布局 / 脱敏 / 发布全绿，变异 **25 项 25 符合预期、0 SKIP** | `verify_gates.py`（R9 为本版新增：改错 SHA256SUMS 一条摘要 → `RELEASE.SHA256SUMS` 必红）；组数由 `tests/test_self_counts.py` 与实测对账 |
 | `SHA256SUMS` | `dist/SHA256SUMS` 覆盖 sdist + wheel，逐条与文件摘要相符 | `RELEASE.SHA256SUMS`（v0.1.1 新增判据，决策 D-M7-2）|
 | 无字体二进制入库 | `git ls-files` 0 个字体二进制 | `RELEASE.NO_FONT_BINARIES` |
 

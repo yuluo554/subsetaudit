@@ -24,7 +24,7 @@
 | AGENTS.md | 仓库锚点：方法论名 + 布局门命令 + 强制布局 + 环境禁忌 | ✅ v1（M0） |
 | tools/check_sprint_layout.py | 布局门（9 判据） | ✅ v1（M0） |
 | tools/check_desensitized.py | 脱敏门（4 条规则） | ✅ v1（M0） |
-| tools/verify_gates.py | **三道门**的变异验证常驻（24 组：布局 12 / 脱敏 4 / 发布 8） | ✅ v1（M6，靶子随里程碑翻新） |
+| tools/verify_gates.py | **三道门**的变异验证常驻（25 组：布局 12 / 脱敏 4 / 发布 9；组数由 `tests/test_self_counts.py` 与实测对账） | ✅ v1（M6，靶子随里程碑翻新；v0.1.1 加 R9） |
 | tools/smoke_cli.py | 离线冒烟（11 条命令，含一条 exit 2 负向） | ✅ v1（M0/M4） |
 | tools/check_release.py | 发布终态门（`--pre-tag` / 离线 / `--online` 三档） | ✅ v1（M6） |
 | tools/gen_fixtures.py | F1–F6 合成破损 fixture 生成器（`--only` / `--check` / 独立 oracle 自证） | ✅ v1（M1） |

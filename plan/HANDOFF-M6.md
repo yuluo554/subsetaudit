@@ -10,7 +10,7 @@
 | 项 | 状态 | 证据（命令 + 结果） |
 |---|---|---|
 | 方法论装订 + 计划套件 | ✅ | `py tools/check_sprint_layout.py` → **9 PASS / 0 FAIL**（含 LAYOUT.RELEASE 两栏 + 覆盖对账 12 行三态） |
-| 布局门 / 脱敏门 / 发布门 | ✅ | `py tools/verify_gates.py` → **24 项全符合预期、0 SKIP**；脱敏门扫 71 个文本文件 0 命中 |
+| 布局门 / 脱敏门 / 发布门 | ✅ | `py tools/verify_gates.py` → **24 项全符合预期、0 SKIP**（M6 时点；v0.1.1 起 **25 项**，加 R9 守 `SHA256SUMS`）；脱敏门扫 71 个文本文件 0 命中 |
 | 可运行骨架 + 退出码契约 | ✅ | 五子命令 exit 0；非字体文件 exit 2；`py tools/smoke_cli.py` **11 条 0 失败** |
 | M1 数据先行 | ✅ | `gen_fixtures.py --check` → 22 个文件位级一致；`fetch_fonts.py --check` 离线报 3 个 MISSING |
 | M2 许可闸门 | ✅ | F1/F2/F3 golden 逐项；五元结论 + 六条违规码；560 face 真实池复跑 0 误报 |
@@ -39,7 +39,8 @@
    文档里写一个新脚本名而实物不存在 → `LAYOUT.DOC_TOOLS` **立刻红**，没有登记表兜底（K10）。
    新增工具时**先落实物、再写进文档**。
 
-3. **`verify_gates.py` 覆盖三道门 24 组**（布局 12 / 脱敏 4 / **发布 8**）。发布门那 8 组跑在
+3. **`verify_gates.py` 覆盖三道门 24 组**（布局 12 / 脱敏 4 / **发布 8**；此为 **M6 时点**的
+   组数，v0.1.1 起为 **25 组** —— 新增 R9 守 `RELEASE.SHA256SUMS`）。发布门那 8 组跑在
    `--pre-tag` 档（离线零网络）。**Online 档的判据不在变异面内**（需要网络与远端事实，
    而 CI 与变异验证必须离线）—— 其可证伪性靠"用不存在的 tag/未推的 ref 跑一次负向探针"，
    发布棒手工做、结果记留档。
@@ -113,7 +114,7 @@
 | K8 | 代码底线 Python 3.8（无 `tomllib`、无 3.9+ 语法、无 `Path.write_text(newline=)`） | `pyproject.toml` requires-python |
 | K9 | 版本三处一致：`__init__.__version__` / `pyproject.toml` / README 状态行 | 两条测试 + `RELEASE.VERSION_TRIPLE` |
 | K10 | 布局门 `PENDING_TOOLS` 登记项**随里程碑翻 ✅ 自清理**（现在为 `{}` = 无未落位工具） | `tools/check_sprint_layout.py` 顶部 |
-| K11 | 门的变异验证常驻 `tools/verify_gates.py`，每棒收尾重跑；靶子随进度翻新 | CI step（现 24 组：布局 12 / 脱敏 4 / 发布 8） |
+| K11 | 门的变异验证常驻 `tools/verify_gates.py`，每棒收尾重跑；靶子随进度翻新 | CI step（M6 时 24 组 → v0.1.1 起 25 组：布局 12 / 脱敏 4 / 发布 9） |
 | K12 | **golden 的 `fonttools_version` = 铸造版本常量**，不是运行时版本 | `tools/gen_fixtures.py::GOLDEN_FONTOOLS_VERSION` |
 | K13 | **fixture 生成禁时钟**：`head.created/modified` 钉 `FIXED_EPOCH`；`TTFont(..., recalcTimestamp=False)` | `tools/gen_fixtures.py::_subset` |
 | K14 | `data/README.md` §六.1 的五元判定式与六条违规码是 `license-gate` 唯一口径；`SPEC_REFS` / `CODE_SPEC_REFS` 是逐字副本 | `license_gate.py`，`tests/test_license_gate.py` |
@@ -174,10 +175,10 @@ CI 里一律 `python` 不用 `py`；Git Bash 会把 `/xxx` 改写成 `D:/program
 ## 六、DoD 逐项 checklist（M6）
 
 - [x] `py tools/check_sprint_layout.py` / `check_desensitized.py` 全绿
-- [x] `py tools/verify_gates.py` 全部符合预期（**24 项、0 SKIP**；L4/L9 靶子已按 §二.4 处理）
+- [x] `py tools/verify_gates.py` 全部符合预期（**M6 时 24 项 → v0.1.1 起 25 项、0 SKIP**；L4/L9 靶子已按 §二.4 处理）
 - [x] `py tools/gen_fixtures.py --check` 位级一致（22 个文件）
 - [x] `py tools/smoke_cli.py` 11 条 0 失败
-- [x] 双解释器测试全绿（3.8 全局 / 3.12 venv，**280 项**；各 6 项 OFL 用例 SKIP，如实标注）
+- [x] 双解释器测试全绿（3.8 全局 / 3.12 venv，**M6 时 280 项 → v0.1.1 起 300 项**；各 6 项 OFL 用例 SKIP，如实标注）。⚠ 计数本身见 `plan/05` 的「全量 **N 项**」，由 `tests/test_self_counts.py` 与实测动态对账
 - [x] `tools/check_release.py` 落位并从 `PENDING_TOOLS` 删除（`PENDING_TOOLS` 现为 `{}`）
 - [x] `LICENSE`（MIT）与 `pyproject.toml` license 字段一致
 - [x] 版本三处一致（`__init__` / `pyproject.toml` / README 状态行 = `0.1.0`）
@@ -193,7 +194,7 @@ CI 里一律 `python` 不用 `py`；Git Bash 会把 `/xxx` 改写成 `D:/program
 # 门（每棒第一件事）
 py tools/check_sprint_layout.py
 py tools/check_desensitized.py
-py tools/verify_gates.py            # 三道门 24 组；收尾必须重跑
+py tools/verify_gates.py            # 三道门 25 组（v0.1.1 起）；收尾必须重跑
 py tools/check_release.py --pre-tag # tag 前（零网络，只落仓库内文件）
 py tools/check_release.py           # tag 后离线（+本地 tag + dist/）
 py tools/check_release.py --online  # 唯一联网档（+GitHub 远端事实）

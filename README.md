@@ -288,7 +288,7 @@ subsetaudit report --source data/fixtures/codepage-mismatch/out/source.ttf --sub
 # 门（每棒第一件事）
 py tools/check_sprint_layout.py     # 布局门（方法论装订）
 py tools/check_desensitized.py      # 脱敏门
-py tools/verify_gates.py            # 三道门的变异验证（24 组必须全红后还原复绿）
+py tools/verify_gates.py            # 三道门的变异验证（25 组必须全红后还原复绿）
 py tools/check_release.py --pre-tag # 发布终态门（tag 前；零网络，只落仓库内文件）
 
 # 测试（仓库根目录直接跑；tests/conftest.py 会把 src/ 放进路径，无需先安装）
@@ -311,17 +311,17 @@ py -X utf8 -m pytest -q
 
 - **仓库**：<https://github.com/yuluo554/subsetaudit>（公开）
 - **tag / Release**：`v0.1.1`（最新），附产物 sdist + wheel + **`SHA256SUMS`**（可直接 `sha256sum -c`），
-  字节数与 sha256 见 `plan/RELEASE-M6.1.md`；前一个版本 `v0.1.0` 的留档见 `plan/RELEASE-M6.md`
+  字节数与 sha256 见 `plan/RELEASE-M6.md` §四–§五（v0.1.0 的留档见同文件 §一–§三）
 - **v0.1.1 改了什么**（全是发布面，判定逻辑未动）：README 的三段"最小复现"从占位符改成**真实可跑路径**
   + 新增常驻测试真跑它们；报告 `tool` 移除环境相关的 `fonttools_version`（样例从此跨环境逐字节一致）；
   新增**跨版本判定一致性**门（`tests/test_cross_channel.py` + `docs/cross-channel-oracle.json`）；
   测试数改由 `tests/test_self_counts.py` 与实测动态对账；CI actions 升 v7（Node20 弃用注解归零）。
 - **报告样例**：`docs/report-sample.json`（用现行实现现跑：F6 `codepage-mismatch` 源 + 产物 + `--text "汉字"`）
-- **发布留档**：`plan/RELEASE-M6.1.md`（本版两栏 + 覆盖对账）/ `plan/RELEASE-M6.md`（v0.1.0）
+- **发布留档**：`plan/RELEASE-M6.md`（§四–§六 = v0.1.1 两栏 + 覆盖对账；§一–§三 = v0.1.0 两栏 + 覆盖对账）
 - **CI**：`.github/workflows/ci.yml`——矩阵 `ubuntu-latest`/`windows-latest` × Python `3.8`/`3.12`。
   步骤次序（**顺序本身有测试钉住**，见 `tests/test_ci_workflow.py`）：布局门 → 脱敏门 → `pip install -e ".[dev]"`
-  → 生成 F1–F6 → 位级 `--check` → 变异验证（`verify_gates.py`，24 组）→ 离线锁文件 → README 安装路径实测
-  → 测试 → 冒烟 → 发布门 `--pre-tag`。run id 见 `plan/RELEASE-M6.1.md` §二
+  → 生成 F1–F6 → 位级 `--check` → 变异验证（`verify_gates.py`，25 组）→ 离线锁文件 → README 安装路径实测
+  → 测试 → 冒烟 → 发布门 `--pre-tag`。run id 见 `plan/RELEASE-M6.md` §五
 
 ## 文档
 

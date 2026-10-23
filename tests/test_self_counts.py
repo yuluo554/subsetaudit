@@ -38,6 +38,11 @@ PLAN = os.path.join(REPO_ROOT, "plan", "05-里程碑.md")
 #: 文档里的声明形态：`全量 **N 项**`
 DECLARED = re.compile(u"全量 \\*\\*(\\d+) 项\\*\\*")
 
+#: 变异组数声明形态（`plan/05-里程碑.md`）：`**N 组**（布局 L / 脱敏 V / **发布 R**）`
+MUTANTS = re.compile(u"\\*\\*(\\d+) 组\\*\\*（布局 (\\d+) / 脱敏 (\\d+) / \\*\\*发布 (\\d+)\\*\\*）")
+
+VERIFY_GATES = os.path.join(REPO_ROOT, "tools", "verify_gates.py")
+
 
 def _plan_text():
     return io.open(PLAN, "r", encoding="utf-8").read()
@@ -96,3 +101,58 @@ def test_gate_would_catch_a_stale_number():
 def test_new_gates_are_real_files(rel):
     """本次迭代新增的两道门必须真的在盘上（防止"文档说有门、实物没有"）。"""
     assert os.path.isfile(os.path.join(REPO_ROOT, rel)), rel
+
+
+# ── 变异组数：同一事实在文档里也曾出现三个值（D3 的第二种形态）────────────────
+#
+# 2026-10-23 实测：`verify_gates.py` 的靶子是 L×12 + V×4 + R×9 = **25**，而当时
+# `plan/05` 写 24、README 写 24、`plan/RELEASE-M6.md` 写 26 —— 三个值，只有一个是真值。
+# 与"全量测试数"同根因（v0.1.1 加 R9 后没人回头改文档），所以同一种判据：**动态取真值**。
+#
+# 判据范围刻意窄：只钉 `plan/05` 的那一处声明（`tests/test_self_counts.py` 的既有纪律是
+# "同一事实只许一处声明"）。历史时点的组数（HANDOFF-M6 里 M6 当时的 24）不参与对账。
+
+def _mutation_ids():
+    """从 `verify_gates.py` 的靶子表里解析出 (前缀, 序号) —— 权威真值，不读文档。"""
+    text = io.open(VERIFY_GATES, "r", encoding="utf-8").read()
+    found = re.findall(u'\\(\\s*"([LVR])(\\d+)"\\s*,', text)
+    assert found, "解析不出 `verify_gates.py` 的靶子 id（表结构被改过？）"
+    groups = {}
+    for prefix, number in found:
+        groups.setdefault(prefix, set()).add(int(number))
+    return {prefix: len(ids) for prefix, ids in groups.items()}
+
+
+def test_plan_declares_mutation_group_count():
+    """`plan/05` 必须声明变异组数，且只有一处。"""
+    found = MUTANTS.findall(_plan_text())
+    assert found, "`plan/05-里程碑.md` 里找不到变异组数声明（形如 `**N 组**（布局 L / 脱敏 V / **发布 R**）`）"
+    assert len(found) == 1, "变异组数出现 %d 处声明（%s）—— 同一事实只许一处" % (
+        len(found), found)
+
+
+def test_declared_mutation_count_matches_source():
+    """文档声明的组数（总数与三组分解）必须等于 `verify_gates.py` 的靶子实数。"""
+    total, layout, desens, release = (int(x) for x in MUTANTS.findall(_plan_text())[0])
+    actual = _mutation_ids()
+    assert (layout, desens, release) == (
+        actual.get("L"), actual.get("V"), actual.get("R")), (
+        "`plan/05` 写 布局 %d / 脱敏 %d / 发布 %d，实测 布局 %s / 脱敏 %s / 发布 %s"
+        % (layout, desens, release,
+           actual.get("L"), actual.get("V"), actual.get("R")))
+    assert total == sum(actual.values()), (
+        "`plan/05` 写共 %d 组，实测共 %d 组（%s）。\n"
+        "**判据**：加/删变异靶子后必须同轮更新文档里的这个数字（这是合法口径调整）；\n"
+        "不许反过来把靶子删到凑数字。" % (total, sum(actual.values()), actual))
+
+
+def test_mutation_count_gate_would_catch_a_stale_number():
+    """变异自证：组数写错时本门必红（在内存里构造，不碰仓库文件）。"""
+    text = _plan_text()
+    total = int(MUTANTS.findall(text)[0][0])
+    stale = text.replace(u"**%d 组**" % total, u"**%d 组**" % (total + 1), 1)
+    assert stale != text, "变异靶子没打中"
+    declared_stale = int(MUTANTS.findall(stale)[0][0])
+    assert declared_stale != sum(_mutation_ids().values()), (
+        "把组数改错后仍与实测相同 —— 判据不承重")
+    assert total == sum(_mutation_ids().values()), "当前文档组数应与实测一致"
