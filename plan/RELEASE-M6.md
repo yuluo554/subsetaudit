@@ -184,17 +184,18 @@ install → 生成 fixture → 位级 `--check` → 变异验证 → 离线锁�
 
 ## 五、v0.1.1 · tag 后追加事实
 
-> **本节在 tag 之后填写**。填之前的状态：**待复验**（执行方不自宣完成）。
+> **本节在 tag 之后填写**。以下数值全部**当场量**（`git rev-parse` / `stat` / `sha256sum` / `gh api`），状态：**待复验**（执行方不自宣完成）。
 
 | 项 | 值 |
 |---|---|
-| tag / 提交 | 待填（annotated tag `v0.1.1` → 冻结提交） |
-| 仓库 / Release | 待填（公开仓库 + Release 附 3 个产物：sdist / wheel / `SHA256SUMS`） |
-| 产物字节数与 sha256 | 待填（**当场 `stat` + `sha256sum`，不凭记忆**） |
-| CI run id（main / tag） | 待填（四格：ubuntu/windows × 3.8/3.12；**必须带 run id + 时间**） |
-| Node20 弃用注解 | 待填（期望 **0 条**） |
-| 匿名验收 | 待填（`curl` API latest + 直链 whl 期望 200；**不带 token**） |
-| 干净环境装 wheel 后跑真场景 | 待填（期望 `license-gate` F1 → rc=1） |
+| tag / 提交 | annotated `v0.1.1`（对象 `6a7e502512bea1edd44c7ebb24433aa256a0d679`）→ 冻结提交 `bc2a839e4d50c7a07d640005fc80a3136a6c0283`（= `main` HEAD，远端 `refs/tags/v0.1.1` 同值） |
+| 仓库 / Release | `https://github.com/yuluo554/subsetaudit`（PUBLIC）；Release `v0.1.1`（`draft=false` / `prerelease=false` / Latest），附 **3** 个产物：sdist / wheel / `SHA256SUMS` |
+| 产物字节数与 sha256 | `subsetaudit-0.1.1-py3-none-any.whl` **49,646 B** `e200070549df1233b7de4bcaa131f4c4639ca84953d60fb43d14d6848a3167aa`；`subsetaudit-0.1.1.tar.gz` **117,391 B** `d71a82f6a40bff85fe22ed1ccc27c1cc70c0a2ea1612300763a2f47a7a689bec`；`SHA256SUMS` **192 B** `30ebd95d8be7e9cf44087ca3f4f84f8e38f4184e8b9f135e8b5f35b586102fef`。**四方一致**（本地 `dist/` / Release 元数据 / GitHub asset `digest` / 匿名下载重算） |
+| CI run id（main / tag） | `main` push **39905828447**（`bc2a839`，2026-10-23T05:27:11Z）；tag `v0.1.1` push **39906418656**（`bc2a839`，2026-10-23T05:33:30Z）。**两次均 4 格全 success**（ubuntu/windows × 3.8/3.12） |
+| Node20 弃用注解 | **0 条**（两次 run 的各 job 逐条查过；只剩 2 条 `ubuntu-latest → Ubuntu 26` 迁移 notice，属外部信号、非本仓可修） |
+| 匿名验收 | **不带 token**：`api.github.com/.../releases/latest` → `tag_name=v0.1.1`、`draft=False`、3 附件；三件经**匿名** API（`Accept: application/octet-stream`）真下载，字节数全对、sha256 与 GitHub `digest` 逐字符一致、`SHA256SUMS` 自洽（`sha256sum -c` 通过）。⚠ **直链 200 未测**：本机 `github.com:443` 当刻不通（`curl` 000，同时刻 `api.github.com` 200）—— 故走匿名 API 通道，**不谎称测过直链** |
+| 干净环境装 wheel 后跑真场景 | 新建 py3.12 venv → `pip install` **匿名下载的** wheel → `--version` = `subsetaudit 0.1.1`；五子命令 `--help` 全 rc=0；真场景 `license-gate data/fixtures/fstype-nosubset/out/fstype-nosubset.ttf` → **rc=1**（如 README 所标）；装态 `report` 与 `docs/report-sample.json` **逐键一致**、`tool` 无 `fonttools_version` |
+| tag 后发布门 | 离线档 rc=0；`--online` 档 **17 PASS / 0 FAIL / rc=0**（含 `REMOTE_TAG` / `REMOTE_RELEASE assets=3` / `PUSH_RUN_PARITY` 四 ref 全绿） |
 
 ## 六、v0.1.1 · 覆盖对账
 
@@ -210,5 +211,5 @@ install → 生成 fixture → 位级 `--check` → 变异验证 → 离线锁�
 | 8 | 发布留档（本文件 §四–§六） | 实现 | 两栏 + 本表 + `LAYOUT.RELEASE` |
 | 9 | 手工源码包 + 校验附件 | 实现 | `py -m build --no-isolation` 从冻结提交产出；`SHA256SUMS` 由 `RELEASE.SHA256SUMS` 逐条校验 |
 | 10 | `WRAPUP-M6.md` 形态替代 | 不适用 | 本仓库采用 `RELEASE-M6.md` 两栏形态（布局门两种形态二选一） |
-| 11 | CI 矩阵实跑（ubuntu/windows × 3.8/3.12） | 待首推 | run id 见 §五（填之前不宣称绿） |
+| 11 | CI 矩阵实跑（ubuntu/windows × 3.8/3.12） | 实现 | `main` run **39905828447** + tag `v0.1.1` run **39906418656**，两次均 4 格全 success、Node20 注解 0（见 §五） |
 | 12 | 跨版本判定一致性 | 实现 | `docs/cross-channel-oracle.json` + `test_cross_channel.py`（两格共比同一份 oracle） |
