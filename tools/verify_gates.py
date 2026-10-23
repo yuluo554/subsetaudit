@@ -23,6 +23,7 @@ from __future__ import print_function
 
 import io
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -48,6 +49,18 @@ def read(rel):
 def write(rel, text):
     with io.open(path_of(rel), "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
+
+
+def current_version():
+    """从 `__init__.py` 取当前版本串 —— 变异靶子用它**动态取值**。
+
+    硬编码版本串会让每次升版后的靶子失配：`_replace_once` 的 ``assert old in text`` 会先把
+    **整条变异**打成失败（不会静默空转，但会让人每次升版都来改门）。动态取值让升级与门脱钩。
+    """
+    match = re.search(r'^__version__\s*=\s*"([^"]+)"',
+                      read("src/subsetaudit/__init__.py"), re.M)
+    assert match, "取不到 __version__（`src/subsetaudit/__init__.py` 形态变了？）"
+    return match.group(1)
 
 
 def run_gate(rel, extra=None):
@@ -197,6 +210,45 @@ RELEASE_ARGS = ("--pre-tag",)
 GATE_ARGS = {RELEASE: RELEASE_ARGS}
 
 
+def _offline_args():
+    """离档案（默认档）—— 给只在该档存在的判据当变异参数。
+
+    `RELEASE.SHA256SUMS` / `RELEASE.DIST_ARTIFACTS` / `RELEASE.TAG_EXISTS` 都活在
+    tag 之后的档位里（`dist/` 与 tag 是发布棒产物）；`--pre-tag` 不跑它们，
+    所以拿 `RELEASE_ARGS` 当参数会得到"判据根本没跑"的假绿。
+    """
+    return ()
+
+
+def _corrupt_sha256sums():
+    """把 `dist/SHA256SUMS` 里第一条摘要的首字符改掉 → `RELEASE.SHA256SUMS` 必须红。
+
+    靶子语义 = "附件里的校验值过期/写错时，门能发现"。这比"删掉 SHA256SUMS"更强：
+    删掉只测"文件在不在"，改错才测"内容对不对"（后者才是用户真正依赖的性质）。
+    """
+    rel = "dist/SHA256SUMS"
+    path = path_of(rel)
+
+    def apply():
+        assert os.path.isfile(path), "缺 %s（先构建 dist/ 并生成 SHA256SUMS）" % rel
+        with io.open(path, "r", encoding="utf-8") as fh:
+            text = fh.read()
+        rows = [r for r in text.split("\n") if r.strip()]
+        assert rows, "%s 是空的" % rel
+        digest, name = rows[0].split("  ", 1)
+        bad = ("0" if digest[0] != "0" else "1") + digest[1:]
+        rows[0] = "%s  %s" % (bad, name)
+        write(rel, "\n".join(rows) + "\n")
+        assert read(rel) != text, "替换后文件未变化: %s" % rel
+
+        def undo():
+            write(rel, text)
+
+        return undo
+
+    return apply()
+
+
 MUTATIONS = [
     ("L1", "删 AGENTS.md", LAYOUT, "LAYOUT.FILES",
      lambda: _remove("AGENTS.md")),
@@ -271,14 +323,15 @@ MUTATIONS = [
     # ── 发布终态门 R1–R8（M6 加的新门 → 判据有几条、变异就补几组）─────────────────
     # 靶子全部打在**真实交付面**上（版本三处 / LICENSE / 报告样例 / cli 参数面 /
     # git 索引 / 发布留档 / PENDING_TOOLS），不依赖"下一个 ⬜ 里程碑"。
+    # R1/R3 的靶子用 `current_version()` **动态取值**：硬编码版本串会让每次升版都得回来改门。
     ("R1", "把 README 状态行的版本改回旧值（三处不一致）", RELEASE, "RELEASE.VERSION_TRIPLE",
-     lambda: _replace_once("README.md", "- **版本**：v0.1.0（M6 已发布）",
-                           "- **版本**：v0.0.9（变异验证用）"), RELEASE_ARGS),
+     lambda: _replace_once("README.md", "- **版本**：v%s" % current_version(),
+                           "- **版本**：v0.0.9"), RELEASE_ARGS),
     ("R2", "把 pyproject 的 license 字段改成非 MIT", RELEASE, "RELEASE.LICENSE_CONSISTENT",
      lambda: _replace_once("pyproject.toml", 'license = { text = "MIT" }',
                            'license = { text = "Apache-2.0" }'), RELEASE_ARGS),
     ("R3", "把报告样例的 tool.version 改旧（与现行实现不同源）", RELEASE, "RELEASE.SAMPLE_JSON",
-     lambda: _replace_once("docs/report-sample.json", '"version": "0.1.0"',
+     lambda: _replace_once("docs/report-sample.json", '"version": "%s"' % current_version(),
                            '"version": "0.0.1"'), RELEASE_ARGS),
     ("R4", "删 cli.py 的 report 子命令（五子命令不全）", RELEASE, "RELEASE.SUBCMDS",
      lambda: _replace_once("src/subsetaudit/cli.py", 'sub.add_parser("report"',
@@ -291,6 +344,11 @@ MUTATIONS = [
     ("R7", "删发布留档的覆盖对账整节", RELEASE, "RELEASE.RELEASE_DOC",
      lambda: _replace_once("plan/RELEASE-M6.md", "## 三、阶段 7 覆盖对账", "## 三、其它"),
      RELEASE_ARGS),
+    # R9 用 `_offline_args()`：这条判据只活在**离线/联网**档（`dist/` 是 tag 后才存在），
+    # 所以靶子必须配上正确的档位参数，否则会因"根本没跑这条判据"而假绿。
+    ("R9", "把 dist/SHA256SUMS 里的一条摘要改错（附件过期仍声称可校验）", RELEASE,
+     "RELEASE.SHA256SUMS",
+     lambda: _corrupt_sha256sums(), _offline_args()),
     ("R8", "往 PENDING_TOOLS 塞一条已 ✅ 里程碑名下的过期登记", RELEASE,
      "RELEASE.PENDING_TOOLS_CLEARED",
      lambda: _replace_once("tools/check_sprint_layout.py", "PENDING_TOOLS = {}",

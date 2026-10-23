@@ -5,7 +5,7 @@
 **审的是产物，不是字体项目。** 输入 = 原字体 + 子集字体 + 必须支持的字符集；
 输出 = 子集是否真覆盖、GSUB/GPOS 是否被弄坏、许可是否允许子集、元数据是否被剥掉。
 
-- **版本**：v0.1.0（M6 已发布）
+- **版本**：v0.1.1（M6 已发布；v0.1.1 = 发布面修正版，见「发布」节与 `plan/RELEASE-M6.md` §四）
 - **交付形态**：纯本地 **Python CLI**（零网络、零模型、零商用字体）
 - **运行期依赖**：`fonttools`（唯一）｜**Python** ≥ 3.8
 
@@ -32,8 +32,20 @@ py -m venv .venv
 # PYTHONPATH=src py -X utf8 -m subsetaudit --version
 ```
 
-> **前置条件**：`pip install -e .` 需要 pip ≥ 21.3（PEP 660）。Python 3.8 的 `venv` 自带
+> **前置条件 ①**：`pip install -e .` 需要 pip ≥ 21.3（PEP 660）。Python 3.8 的 `venv` 自带
 > pip 20.2.3，**不先升级会报** `editable mode currently requires a setup.py based build`。
+>
+> **前置条件 ②（装完仍跑不了任何场景，直到做这一步）**：fixture **二进制产物不入仓**
+> （`data/fixtures/*/out/` 与 `data/fonts/` 都在 `.gitignore` 里，设计如此 —— 绝不分发字体二进制）。
+> 新 clone 必须先造产物：
+>
+> ```bash
+> python tools/gen_fixtures.py        # 6 个 fixture，纯程序合成，零网络，rc=0
+> python tools/fetch_fonts.py         # 可选：下载 data/fonts.lock 登记的 3 个 OFL 字体（联网）
+> ```
+>
+> 不跑生成器时，五个子命令对 `data/fixtures/*/out/*.ttf` 会报 `输入非法: …: file_not_found`
+> 并 `exit 2`（**不会**静默给出"通过"的假结论）；依赖 OFL 字体的 6 条用例会显式 `SKIP`。
 
 ## 现状（M6 已发布）
 
@@ -45,7 +57,7 @@ py -m venv .venv
 | M3 | `coverage-diff` 覆盖差集（三分类 + 回退链） | ✅ |
 | M4 | `layout-survival` 布局保真（Type 7/9 解包） | ✅ |
 | M5 | `metadata` + `report`（cmap↔OS/2 交叉一致性） | ✅ |
-| M6 | 发布：GitHub 公开仓库 v0.1.0 | ✅ |
+| M6 | 发布：GitHub 公开仓库 v0.1.0（→ 发布面修正版 v0.1.1） | ✅ |
 
 > 状态语义：`✅` 已完成、`⬜` 未开始。**五个子命令全部产出真实判定**（M5 起 `metadata`
 > 与 `report` 不再走骨架出口）。`SKIPPED(reason=...)` 只在**输入真的缺表**时出现
@@ -186,30 +198,45 @@ py -m venv .venv
 
 ## 三个场景（最小复现命令）
 
-> 以下命令中五个子命令（`license-gate` / `coverage-diff` / `layout-survival` / `metadata` / `report`）
-> 都已产出真实判定。
-> 未标注 `<...>` 的参数都是真实路径；尖括号是占位符，请替换。
+> **可直接复制运行**：以下 7 条命令的参数都是仓库内的真实路径，没有占位符。
+> 前提是先把 fixture 产物造出来（`data/fixtures/*/out/` **不入仓**，`.gitignore` 已阻断）：
+>
+> ```bash
+> python tools/gen_fixtures.py        # 6 个 fixture / 9 个 .ttf / 约 10 KB，rc=0
+> ```
+>
+> 每条命令上方标注**期望退出码**（`0` 通过 / `1` 有 error 级发现 / 见「退出码」一节）。
+> 这 7 条命令由 `tests/test_readme_scenarios.py` **常驻真跑**：断言路径存在、真执行、
+> 退出码与标注一致（`tests/test_cli.py` 的参数面反射只验"parser 认不认这个参数形态"，
+> 不验文件存在 —— 两层判据分工不同，缺一不可）。
 
 ### 场景一：许可闸门（能不能嵌、能不能子集）
 
 ```bash
-subsetaudit license-gate <font.ttf>
-subsetaudit license-gate <font.ttf> --markdown --out license.md
+# rc=1 —— fsType 带 NoSubsetting 位（真实数据：F1 fixture）
+subsetaudit license-gate data/fixtures/fstype-nosubset/out/fstype-nosubset.ttf
+# rc=0 —— 可编辑/可嵌入的 multibit v0，出 Markdown 渲染视图
+subsetaudit license-gate data/fixtures/fstype-multibit-v0/out/fstype-multibit-v0.ttf --markdown --out license.md
 ```
 
 ### 场景二：覆盖差集（子集是否真覆盖）
 
 ```bash
-subsetaudit coverage-diff <source.ttf> --text "汉字abc"
-subsetaudit coverage-diff <source.ttf> --corpus <chars.txt> --subset <subset.ttf>
+# rc=0 —— 源字体缺"汉字"属 warn（原文缺字是语料问题，默认不判红）
+subsetaudit coverage-diff data/fixtures/silent-drop/out/source.ttf --text "汉字abc"
+# rc=1 —— 给了 --subset 才会算 LOST_IN_SUBSET；F4 的产物静默丢了汉字
+subsetaudit coverage-diff data/fixtures/silent-drop/out/source.ttf --text "abc汉字" --subset data/fixtures/silent-drop/out/subset.ttf
 ```
 
 ### 场景三：布局与元数据（是否被弄坏）
 
 ```bash
-subsetaudit layout-survival <source.ttf> <subset.ttf>
-subsetaudit metadata <subset.ttf> --source <source.ttf>
-subsetaudit report --source <source.ttf> --subset <subset.ttf> --text "abc" --format markdown --out audit.md
+# rc=0 —— 三个 OFL fixture 没有 GSUB/GPOS，走 SKIPPED(reason=no_layout_tables)，不影响退出码
+subsetaudit layout-survival data/fixtures/silent-drop/out/source.ttf data/fixtures/silent-drop/out/subset.ttf
+# rc=0 —— F5 的产物被剥掉 name 记录：可证矛盾才产 finding
+subsetaudit metadata data/fixtures/metadata-stripped/out/subset.ttf --source data/fixtures/metadata-stripped/out/source.ttf
+# rc=1 —— 聚合报告（F6 codepage-mismatch 源 + 产物），Markdown 只是渲染视图
+subsetaudit report --source data/fixtures/codepage-mismatch/out/source.ttf --subset data/fixtures/codepage-mismatch/out/subset.ttf --text "汉字" --format markdown --out audit.md
 ```
 
 ## 退出码
@@ -226,7 +253,7 @@ subsetaudit report --source <source.ttf> --subset <subset.ttf> --text "abc" --fo
 {
   "schema": "subsetaudit/report@1",
   "disclaimer": "技术判定，不是法律意见；每条结论可回指 spec_ref 或实测证据。",
-  "tool": { "name": "subsetaudit", "version": "...", "fonttools_version": "..." },
+  "tool": { "name": "subsetaudit", "version": "..." },
   "inputs": { "source": "arial.ttf", "subset": "a.subset.ttf" },
   "summary": { "error": 0, "warn": 1, "note": 0, "skipped": 1 },
   "findings": [ { "module": "...", "code": "...", "severity": "error|warn|note",
@@ -236,7 +263,11 @@ subsetaudit report --source <source.ttf> --subset <subset.ttf> --text "abc" --fo
 ```
 
 - 排序键固定为 `(module, severity, primary_key)`；字符集按码位升序；三元组按 `(script, langsys, feature)`。
-- 报告**不含**时间戳 / 绝对路径 / 主机名 / 用户名；同一输入两次运行**逐字节一致**。
+- 报告**不含**时间戳 / 绝对路径 / 主机名 / 用户名 / **第三方库版本**；同一输入两次运行**逐字节一致**。
+  **`tool` 只有 `name` + `version`**：`fontTools` 版本曾被写进 `tool.fonttools_version`（v0.1.0），
+  它是唯一随环境漂、且**不影响任何判定结论**的量（v0.1.1 起移除，见 `plan/00` 决策 D-M7-1）——
+  留着它会让"跨环境逐字节一致"变成不可证命题。跨版本判定一致性改由
+  `tests/test_cross_channel.py` 的常驻门守着。
 - Markdown 只是渲染视图，**不参与** `digest`、**不参与**退出码。
 
 ## 已知边界与非目标
@@ -276,16 +307,21 @@ py -X utf8 -m pytest -q
   Release 附产物、push 数 = run 数对账 —— 口径是"**每个已推送的 ref 都有对应的 push 运行、
   且最近一次结论为绿**"）
 
-## 发布（v0.1.0）
+## 发布（v0.1.1）
 
 - **仓库**：<https://github.com/yuluo554/subsetaudit>（公开）
-- **tag / Release**：`v0.1.0`，Release 附产物（sdist + wheel，含 sha256）见 `plan/RELEASE-M6.md`
+- **tag / Release**：`v0.1.1`（最新），附产物 sdist + wheel + **`SHA256SUMS`**（可直接 `sha256sum -c`），
+  字节数与 sha256 见 `plan/RELEASE-M6.1.md`；前一个版本 `v0.1.0` 的留档见 `plan/RELEASE-M6.md`
+- **v0.1.1 改了什么**（全是发布面，判定逻辑未动）：README 的三段"最小复现"从占位符改成**真实可跑路径**
+  + 新增常驻测试真跑它们；报告 `tool` 移除环境相关的 `fonttools_version`（样例从此跨环境逐字节一致）；
+  新增**跨版本判定一致性**门（`tests/test_cross_channel.py` + `docs/cross-channel-oracle.json`）；
+  测试数改由 `tests/test_self_counts.py` 与实测动态对账；CI actions 升 v7（Node20 弃用注解归零）。
 - **报告样例**：`docs/report-sample.json`（用现行实现现跑：F6 `codepage-mismatch` 源 + 产物 + `--text "汉字"`）
-- **发布留档**：`plan/RELEASE-M6.md`（tag 前事实 / tag 后追加事实分栏 + 阶段 7 覆盖对账）
+- **发布留档**：`plan/RELEASE-M6.1.md`（本版两栏 + 覆盖对账）/ `plan/RELEASE-M6.md`（v0.1.0）
 - **CI**：`.github/workflows/ci.yml`——矩阵 `ubuntu-latest`/`windows-latest` × Python `3.8`/`3.12`。
   步骤次序（**顺序本身有测试钉住**，见 `tests/test_ci_workflow.py`）：布局门 → 脱敏门 → `pip install -e ".[dev]"`
   → 生成 F1–F6 → 位级 `--check` → 变异验证（`verify_gates.py`，24 组）→ 离线锁文件 → README 安装路径实测
-  → 测试 → 冒烟 → 发布门 `--pre-tag`。首推后的四格全绿 run id 见 `plan/RELEASE-M6.md` §二
+  → 测试 → 冒烟 → 发布门 `--pre-tag`。run id 见 `plan/RELEASE-M6.1.md` §二
 
 ## 文档
 

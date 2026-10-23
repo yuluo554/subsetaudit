@@ -173,6 +173,13 @@ def test_readme_command_lines_parse_against_parser():
     · ``<...>`` 占位符**替换成具体值**（而不是删掉）—— 删掉会让 `--corpus <f>` 退化成
       "选项后面没有值"，把"文档写的形态"误判成"parser 不接受"（变异靶子瞄错）；
     · ``--version`` / ``--help`` 由 argparse 自己 ``SystemExit(0)``，那是**成功**形态。
+
+    **本测试的覆盖范围只有"参数形态"**：`<...>` 被换成字面量 ``placeholder`` 再喂 parser，
+    所以它**不验**文件是否存在、也不验退出码。那两件事由
+    ``tests/test_readme_scenarios.py`` 用 README 里的真实路径常驻真跑（2026-10-23 补，
+    起因是 README 的三段"最小复现"曾全是占位符、照抄必 `file_not_found`，而这道门仍是绿的
+    —— 门没错，是范围不够）。**两层判据都要留着**：删掉这一层就没人守"README 写了 parser
+    不认的选项"，删掉那一层就没人守"路径不存在/退出码不符"。
     """
     import re
 

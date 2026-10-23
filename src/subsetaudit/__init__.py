@@ -5,6 +5,6 @@
 必须与它同步（由 ``tests/test_cli.py`` 的两条断言钉住，改版时两处一起改）。
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 __all__ = ["__version__"]

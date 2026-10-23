@@ -30,19 +30,17 @@ COLLISION_SPEC_REF = "data/README §6.9"
 
 
 def build(findings, skips, inputs, summary=None):
-    """把各模块结果组装成规范报告（真实实现，M0 即可用）。"""
-    try:
-        import fontTools
-        ft_version = getattr(fontTools, "version", "unknown")
-    except ImportError:  # pragma: no cover - fontTools 是运行期依赖，缺了应报输入错误
-        ft_version = "absent"
+    """把各模块结果组装成规范报告（真实实现，M0 即可用）。
+
+    ``tool`` 只带本包版本；**不带 fontTools 版本**（决策 D-M7-1，见 `canonical.build_report`
+    docstring）—— 环境相关量进报告会让"跨环境逐字节一致"不可证。
+    """
     return canonical.build_report(
         findings,
         skips,
         inputs,
         summary=summary,
         tool_version=__version__,
-        fonttools_version=ft_version,
     )
 
 

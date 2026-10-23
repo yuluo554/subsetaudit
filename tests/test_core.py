@@ -46,10 +46,9 @@ def test_report_is_byte_identical_across_runs():
                                   evidence={"fsType": "0x0108"}, spec_ref="MS-OS2 bit8")]
     skips = [canonical.skipped("metadata", "no_name_table", "")]
     first = canonical.dumps(canonical.build_report(findings, skips, {"font": "a.ttf"},
-                                                   tool_version="x", fonttools_version="y"))
+                                                   tool_version="x"))
     second = canonical.dumps(canonical.build_report(list(reversed(findings)), list(skips),
-                                                    {"font": "a.ttf"}, tool_version="x",
-                                                    fonttools_version="y"))
+                                                    {"font": "a.ttf"}, tool_version="x"))
     assert first == second
     assert first.endswith("\n") and not first.endswith("\n\n")
 
@@ -63,8 +62,7 @@ def test_report_carries_no_timestamp_path_host_or_username():
     import getpass
     import platform
 
-    body = canonical.build_report([], [], {"font": "a.ttf"}, tool_version="x",
-                                 fonttools_version="y")
+    body = canonical.build_report([], [], {"font": "a.ttf"}, tool_version="x")
     text = canonical.dumps(body)
     banned = ["2026-", "C:\\", "/home/", "127.0.0.1", platform.node()]
     username = ""
@@ -86,14 +84,28 @@ def test_input_ref_keeps_only_basename():
 
 def test_markdown_render_mentions_skips_and_disclaimer():
     body = canonical.build_report([], [canonical.skipped("metadata", "no_os2_table", "d")],
-                                  {}, tool_version="x", fonttools_version="y")
+                                  {}, tool_version="x")
     md = canonical.render_markdown(body)
     assert "no_os2_table" in md
     assert "法律意见" in md
 
 
+def test_report_carries_no_environment_varying_field():
+    """`tool` 只带不随环境变的量（包名 + 本包版本）—— 决策 D-M7-1。
+
+    背景（2026-10-23 D2）：`tool.fonttools_version` 曾让 `docs/report-sample.json` 在
+    fonttools 升级后必然漂（4.57.0 → 4.67.0），而发布门不校验它 ⇒ "跨环境逐字节一致"这个
+    承诺变成不可证命题。修法是**把环境量拿出报告**，不是加一条必然两格红的门。
+    变异：往 `tool` 里加回任何 `*_version`（除本包 `version`）→ 本测试必红。
+    """
+    body = canonical.build_report([], [], {"font": "a.ttf"}, tool_version="x")
+    assert set(body["tool"]) == {"name", "version"}, body["tool"]
+    text = canonical.dumps(body).lower()
+    assert "fonttools_version" not in text, "报告不得内嵌 fontTools 版本（环境相关量）"
+
+
 def test_digest_is_stable_and_markdown_does_not_affect_it():
-    body = canonical.build_report([], [], {}, tool_version="x", fonttools_version="y")
+    body = canonical.build_report([], [], {}, tool_version="x")
     assert canonical.digest(body) == canonical.digest(body)
     before = canonical.digest(body)
     canonical.render_markdown(body)

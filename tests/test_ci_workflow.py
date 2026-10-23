@@ -188,3 +188,22 @@ def test_ci_uses_python_not_windows_only_py_launcher(workflow):
 def test_ci_sets_utf8_env_for_all_steps(workflow):
     env = workflow["jobs"]["test"].get("env", {})
     assert str(env.get("PYTHONUTF8")) == "1", "CI 必须设 PYTHONUTF8=1（本机 -X utf8 救不了 CI）"
+
+
+def test_ci_actions_are_on_v7_or_newer(workflow):
+    """`actions/checkout` 与 `actions/setup-python` 必须 ≥ v7（D4，2026-10-23）。
+
+    实测背景：v4 / v5 会在每个 job 上产生一条 `Node.js 20 is deprecated` 注解
+    （四格子 = 4 条/次），且 Node 20 本身已进入弃用期。升到 v7 后注解归零。
+    **判据是"版本 ≥ 7"而不是"恰好等于 v7"**：将来升 v8 时本测试不该红。
+    """
+    uses = [step.get("uses", "") for step in workflow["jobs"]["test"]["steps"]]
+    for action in ("actions/checkout@", "actions/setup-python@"):
+        matches = [u for u in uses if u.startswith(action)]
+        assert matches, "CI 里找不到 %s（步骤被删了？）" % action
+        for ref in matches:
+            tag = ref.split("@", 1)[1]
+            assert tag.startswith("v"), ref
+            major = tag[1:].split(".", 1)[0]
+            assert major.isdigit(), "解析不出 action 主版本: %r" % ref
+            assert int(major) >= 7, "%s 低于 v7（Node20 弃用注解会回来）: %r" % (action, ref)

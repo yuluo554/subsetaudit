@@ -3,8 +3,7 @@
   "disclaimer": "技术判定，不是法律意见；每条结论可回指 spec_ref 或实测证据。",
   "tool": {
     "name": "subsetaudit",
-    "version": "0.1.0",
-    "fonttools_version": "4.57.0"
+    "version": "0.1.1"
   },
   "inputs": {
     "source": "source.ttf",

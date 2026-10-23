@@ -135,3 +135,80 @@ install → 生成 fixture → 位级 `--check` → 变异验证 → 离线锁�
 | 9 | 手工源码包（sdist + wheel） | 实现 | `py -m build --no-isolation` 从冻结提交产出；两个 sha256 记入 §二；wheel 单独装在干净 venv 里可用 |
 | 10 | `WRAPUP-M6.md` 形态替代 | 不适用 | 本仓库采用 `RELEASE-M6.md` 两栏形态（布局门两种形态二选一） |
 | 11 | CI 矩阵实跑（ubuntu/windows × 3.8/3.12） | 实现 | 四格全绿，run id `39524912868`（main）/ `39524926846`（v0.1.0）；`--online` 的 push 数 = run 数对账通过 |
+
+---
+
+# 附：v0.1.1 发布留档（发布面修正版，2026-10-23）
+
+> v0.1.0 的留档在上方 §一–§三，**一个字未改**（已发布版本的事实用过去时保留）。
+> v0.1.1 是**发布面修正版**：判定逻辑（五个子命令的规则与退出码）零改动，
+> 改的是「README 能不能照抄跑」「报告样例会不会随环境漂」「跨版本判定有没有门」
+> 「文档数字对不对」「CI action 版本」这五件事。
+>
+> 发布终态门：`py tools/check_release.py --pre-tag`（tag 前）/ 离线（tag 后）/
+> `--online`（唯一联网档）。**v0.1.1 起多一条判据 `RELEASE.SHA256SUMS`**（见 §一末）。
+
+## 四、v0.1.1 · tag 前事实（tag 之前成立；零网络）
+
+| 项 | 值 | 证据 |
+|---|---|---|
+| 版本 | `0.1.1`（三处一致） | `src/subsetaudit/__init__.py` / `pyproject.toml` / `README.md` 状态行；`RELEASE.VERSION_TRIPLE` |
+| 为什么发新版而不是重切 v0.1.0 | 修的是**文字与样例**，不是代码缺陷；重切会让"已被用户下载过的 v0.1.0"语义失真 | 本仓 v0.1.0 已重切 4 次（见 §二），第 5 次没有正当理由 |
+| 报告样例 | `docs/report-sample.json`（`tool` 现在只有 `name` + `version`） | 现跑落盘，与 oracle 门共用同一命令；`RELEASE.SAMPLE_JSON` 断言 schema/版本/inputs + **不得含环境字段** |
+| 跨版本冻结点 | `docs/cross-channel-oracle.json`（5 条命令 × 完整报告体） | `tests/test_cross_channel.py`：当前通道逐字节比对；3.12(4.67.0) 与 3.8(4.57.0) 实测一致 |
+| README 最小复现 | 7 条命令全是真实路径，且每条标注 `rc=N` | `tests/test_readme_scenarios.py` 真跑子进程，退出码与标注一致；变异自证（改坏路径 → 4 条红） |
+| 测试数自证 | `plan/05` 的「全量 **N 项**」与实测对账 | `tests/test_self_counts.py`（动态取 `--collect-only` 真值，不硬编码） |
+| CI action 版本 | `actions/checkout@v7` / `actions/setup-python@v7` | `tests/test_ci_workflow.py::test_ci_actions_are_on_v7_or_newer`（判 ≥v7，升 v8 不红） |
+| 测试（双解释器） | 3.12 → **300 passed**；3.8 → 见 §五 | `pytest -o addopts=""`（`addopts="-q"` 下再加 `-q` 会吞掉汇总行） |
+| 四道门 | 布局 / 脱敏 / 发布全绿，变异 **26 项 26 符合预期、0 SKIP** | `verify_gates.py`（R9 为本版新增：改错 SHA256SUMS 一条摘要 → `RELEASE.SHA256SUMS` 必红） |
+| `SHA256SUMS` | `dist/SHA256SUMS` 覆盖 sdist + wheel，逐条与文件摘要相符 | `RELEASE.SHA256SUMS`（v0.1.1 新增判据，决策 D-M7-2）|
+| 无字体二进制入库 | `git ls-files` 0 个字体二进制 | `RELEASE.NO_FONT_BINARIES` |
+
+**v0.1.1 相对 v0.1.0 的交付面改动**（`src/` + `tests/` + `tools/` + `docs/` + `README.md`）：
+
+| 文件 | 改动 | 判据落在哪 |
+|---|---|---|
+| `README.md` | 三段「最小复现」改真实路径 + 每条 `rc=N` + 安装段补 fixture 前置；`tool` 字段说明去 `fonttools_version`；发布节改 v0.1.1 | `test_readme_scenarios.py` |
+| `src/subsetaudit/canonical.py` / `report.py` | `tool` 去掉 `fonttools_version`（Markdown 版本行同步） | `test_core.py::test_report_carries_no_environment_varying_field` + `RELEASE.SAMPLE_JSON` |
+| `docs/report-sample.json` | 按 v0.1.1 重生成（`tool` 只剩两个键） | 门禁 2 的逐键 assert |
+| `docs/cross-channel-oracle.json` | **新增**（跨版本冻结点，5 条命令） | `test_cross_channel.py` |
+| `tests/test_readme_scenarios.py` | **新增**（6 条：解析/静态/真跑/三条变异自证） | 自身即判据 |
+| `tests/test_cross_channel.py` | **新增**（7 条：比对/oracle 覆盖/无环境字段/入库/两条变异/第二解释器） | 自身即判据 |
+| `tests/test_self_counts.py` | **新增**（5 条：声明唯一/与实测一致/变异/新门在位） | 自身即判据 |
+| `tests/test_ci_workflow.py` | 新增一条 `≥v7` 判据 | 变异自证：改回 v4 → 红 |
+| `tools/check_release.py` | `SAMPLE_JSON` 加"禁环境字段"否定断言；新增 `RELEASE.SHA256SUMS` | `verify_gates.py` R3/R9 |
+| `tools/check_desensitized.py` | `SKIP_DIRS` 收编 `update/` | 脱敏门自身（扫 75 文件 0 命中） |
+| `tools/verify_gates.py` | R1/R3 靶子改 `current_version()` 动态取值；新增 R9 | 自身（26 项全符合预期） |
+| `.github/workflows/ci.yml` | `checkout@v4→v7`、`setup-python@v5→v7`（步骤名/次序未动） | `test_ci_workflow.py` 12 条原有断言仍绿 |
+| `.gitignore` | 加 `update/` | 第 0 批卫生 |
+
+## 五、v0.1.1 · tag 后追加事实
+
+> **本节在 tag 之后填写**。填之前的状态：**待复验**（执行方不自宣完成）。
+
+| 项 | 值 |
+|---|---|
+| tag / 提交 | 待填（annotated tag `v0.1.1` → 冻结提交） |
+| 仓库 / Release | 待填（公开仓库 + Release 附 3 个产物：sdist / wheel / `SHA256SUMS`） |
+| 产物字节数与 sha256 | 待填（**当场 `stat` + `sha256sum`，不凭记忆**） |
+| CI run id（main / tag） | 待填（四格：ubuntu/windows × 3.8/3.12；**必须带 run id + 时间**） |
+| Node20 弃用注解 | 待填（期望 **0 条**） |
+| 匿名验收 | 待填（`curl` API latest + 直链 whl 期望 200；**不带 token**） |
+| 干净环境装 wheel 后跑真场景 | 待填（期望 `license-gate` F1 → rc=1） |
+
+## 六、v0.1.1 · 覆盖对账
+
+| # | 交付物 | 状态 | 证据 |
+|---|---|---|---|
+| 1 | 可安装 CLI（五子命令） | 实现 | `RELEASE.SUBCMDS`；干净 venv 真装后 `--version` + 真场景 rc=1 |
+| 2 | 源实现（五模块 + 共享层） | 实现 | `src/subsetaudit/`（判定逻辑本版零改动） |
+| 3 | 6 类合成破损 fixture | 实现 | `gen_fixtures.py --check` 位级一致 |
+| 4 | OFL 字体回归套件 | 实现 | `data/fonts.lock` + `fetch_fonts.py --check`（离线；CI 上 6 条 SKIP，如实标注） |
+| 5 | 测试套件 | 实现 | `pytest -o addopts=""` 双解释器全绿（计数由 `test_self_counts.py` 与实测对账） |
+| 6 | 报告样例 | 实现 | 现跑落盘；`RELEASE.SAMPLE_JSON`（含"禁环境字段"否定断言） |
+| 7 | README（安装 + 三场景 + 字段 + 边界 + 护城河） | 实现 | **本版起由 `test_readme_scenarios.py` 真跑**，不只是参数面反驳 |
+| 8 | 发布留档（本文件 §四–§六） | 实现 | 两栏 + 本表 + `LAYOUT.RELEASE` |
+| 9 | 手工源码包 + 校验附件 | 实现 | `py -m build --no-isolation` 从冻结提交产出；`SHA256SUMS` 由 `RELEASE.SHA256SUMS` 逐条校验 |
+| 10 | `WRAPUP-M6.md` 形态替代 | 不适用 | 本仓库采用 `RELEASE-M6.md` 两栏形态（布局门两种形态二选一） |
+| 11 | CI 矩阵实跑（ubuntu/windows × 3.8/3.12） | 待首推 | run id 见 §五（填之前不宣称绿） |
+| 12 | 跨版本判定一致性 | 实现 | `docs/cross-channel-oracle.json` + `test_cross_channel.py`（两格共比同一份 oracle） |

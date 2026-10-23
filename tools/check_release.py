@@ -133,7 +133,15 @@ def check_license_consistent():
 
 
 def check_sample_json(version):
-    """`docs/report-sample.json` 落盘、是规范 JSON、与现行版本同源、inputs 只有 basename。"""
+    """`docs/report-sample.json` 落盘、是规范 JSON、与现行版本同源、inputs 只有 basename。
+
+    另有一条**否定断言**（决策 D-M7-1，2026-10-23）：报告里**不得**出现环境相关字段
+    （`fonttools_version` 之类）。理由：样例是"跨环境逐字节一致"这条承诺的载体，
+    只要 `tool` 里留一个随环境漂的量，样例就会在每次依赖升级后与现行实现不符，
+    而这种漂移**不影响任何判定结论** —— 留在报告里是净负债。
+    这条判据是"代码里别再加回来"的常驻守门（不是校验某个具体值，所以**不会**在
+    3.8 / 3.12 双矩阵上必然红一格）。
+    """
     text = read(SAMPLE)
     if text is None:
         add("RELEASE.SAMPLE_JSON", False, "缺 %s（`plan/04` §1 入仓项）" % SAMPLE)
@@ -149,13 +157,17 @@ def check_sample_json(version):
     got = (body.get("tool") or {}).get("version")
     if got != version:
         problems.append("tool.version=%r（须= %r）" % (got, version))
+    env_fields = sorted(k for k in (body.get("tool") or {}) if k.endswith("_version") and k != "version")
+    if env_fields:
+        problems.append("tool 里出现环境相关字段 %s（决策 D-M7-1：报告只带 name+version）"
+                        % ",".join(env_fields))
     for key, value in (body.get("inputs") or {}).items():
         if value != os.path.basename(value):
             problems.append("inputs.%s 不是 basename: %r" % (key, value))
     if "findings" not in body or "skipped" not in body:
         problems.append("缺 findings/skipped 键")
     add("RELEASE.SAMPLE_JSON", not problems,
-        "%s 同源（schema/版本/inputs/findings 齐）" % SAMPLE if not problems
+        "%s 同源（schema/版本/inputs/findings 齐，tool 无环境字段）" % SAMPLE if not problems
         else "%s: %s" % (SAMPLE, "；".join(problems)))
 
 
@@ -371,6 +383,43 @@ def dist_checks(version):
     for name in sdist + wheel:
         lines.append("%s sha256:%s" % (name, _sha256(os.path.join(dist, name))[:16]))
     add("RELEASE.DIST_ARTIFACTS", True, "；".join(lines))
+    _check_sha256sums(dist, sdist + wheel)
+
+
+def _check_sha256sums(dist, artifacts):
+    """`dist/SHA256SUMS` 必须存在，且**每一条都真的对得上**（决策 D-M7-2，v0.1.1 起）。
+
+    为什么是"附件 + 门"两件一起做：只发一个 `SHA256SUMS` 附件而不校验它，等于给用户一个
+    **可能过期的校验工具**（改过产物忘了重算）—— 那比没有更危险，因为它给人"已校验"的错觉。
+    格式按 `sha256sum` 的习惯：`<64 hex>  <basename>`（两个空格，**不带 `*`**），LF 结尾。
+    """
+    path = os.path.join(dist, "SHA256SUMS")
+    if not os.path.isfile(path):
+        add("RELEASE.SHA256SUMS", False,
+            "缺 dist/SHA256SUMS（v0.1.1 起随 Release 附 SHA256SUMS；见决策 D-M7-2）")
+        return
+    with io.open(path, "r", encoding="utf-8") as fh:
+        rows = [line.rstrip("\n") for line in fh if line.strip()]
+    listed = {}
+    problems = []
+    for row in rows:
+        parts = row.split("  ")
+        if len(parts) != 2 or len(parts[0]) != 64:
+            problems.append("行格式不对（须 `<64 hex>  <basename>`）: %r" % row)
+            continue
+        listed[parts[1].strip()] = parts[0].strip()
+    for name in artifacts:
+        want = listed.get(name)
+        if want is None:
+            problems.append("SHA256SUMS 里没有 %s" % name)
+        elif want != _sha256(os.path.join(dist, name)):
+            problems.append("%s 的 sha256 与文件不符（SHA256SUMS 过期？）" % name)
+    extra = sorted(set(listed) - set(artifacts))
+    if extra:
+        problems.append("SHA256SUMS 列了不存在的产物: %s" % ",".join(extra))
+    add("RELEASE.SHA256SUMS", not problems,
+        "dist/SHA256SUMS 覆盖 %d 个产物且逐条相符" % len(artifacts) if not problems
+        else "；".join(problems))
 
 
 # ── 段三：GitHub 远端事实（--online，唯一联网档）──────────────────────────────

@@ -40,6 +40,10 @@ SKIP_DIRS = {
     # 2026-10-21 CI 实测补：README 安装路径步骤建 `.venv-readme/`（gitignore 已声明），
     # 漏收时 Windows 格子会因 `.venv-readme/Scripts/Activate.ps1` 里的本机路径变红。
     ".venv-readme",
+    # 2026-10-23 二次迭代补：`update/` 是**诊断/执行交接目录**（`.gitignore:155` 已声明），
+    # 里面按设计就写着本机路径（诊断方临时 venv 的位置等），且永不入仓。
+    # 不收编会让"交接物存在"本身把门打红 —— 那不是仓库内容，是工作台。
+    "update",
 }
 #: 名字随包名变的本地安装产物（`src/subsetaudit.egg-info/` 由 `pip install -e .` 现生成）。
 SKIP_SUFFIXES = (".egg-info", ".dist-info")

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "subsetaudit"
-version = "0.1.0"
+version = "0.1.1"
 description = "字体派生产物体检：子集正确性审计（覆盖 / 布局 / 许可 / 元数据）"
 readme = "README.md"
 requires-python = ">=3.8"

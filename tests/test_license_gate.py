@@ -234,7 +234,7 @@ def test_report_carries_the_technical_verdict_disclaimer():
     font, _ = _fixture_font("F1")
     findings, skips, summary = _evaluate(font)
     body = canonical.build_report(findings, skips, {"font": "f.ttf"}, summary,
-                                  tool_version="x", fonttools_version="y")
+                                  tool_version="x")
     assert "法律意见" in body["disclaimer"]
     assert "法律意见" in canonical.render_markdown(body)
     assert "`embed_pdf`" in canonical.render_markdown(body), "Markdown 必须渲染五元结论"
@@ -243,9 +243,9 @@ def test_report_carries_the_technical_verdict_disclaimer():
 def test_evaluate_is_deterministic():
     font, _ = _fixture_font("F3")
     a = canonical.dumps(canonical.build_report(*license_gate.evaluate(font), {"font": "f.ttf"},
-                                               tool_version="x", fonttools_version="y"))
+                                               tool_version="x"))
     b = canonical.dumps(canonical.build_report(*license_gate.evaluate(font), {"font": "f.ttf"},
-                                               tool_version="x", fonttools_version="y"))
+                                               tool_version="x"))
     assert a == b
 
 

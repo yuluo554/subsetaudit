@@ -89,8 +89,15 @@ def input_ref(path):
     return os.path.basename(path.replace("\\", "/"))
 
 
-def build_report(findings, skips, inputs, summary=None, tool_version=None, fonttools_version=None):
-    """组装规范报告：键序在此固定。"""
+def build_report(findings, skips, inputs, summary=None, tool_version=None):
+    """组装规范报告：键序在此固定。
+
+    ``tool`` 只放**不随环境变**的量（包名 + 本包版本）。
+    **fontTools 版本不进报告**（2026-10-23 决策，见 `plan/00` 决策记录 D-M7-1）：
+    它是唯一随环境漂、且**不影响任何判定结论**的字段（实测 4.57.0 / 4.67.0 两通道
+    `summary` 与 `findings` 逐字节相同），放进报告会让"跨环境逐字节一致"变成不可证命题。
+    跨版本判定一致性由 `tests/test_cross_channel.py` 的常驻门守着（不是靠字段自证）。
+    """
     findings = sort_findings(findings)
     skips = sort_skipped(skips)
     body = {
@@ -99,7 +106,6 @@ def build_report(findings, skips, inputs, summary=None, tool_version=None, fontt
         "tool": {
             "name": "subsetaudit",
             "version": tool_version,
-            "fonttools_version": fonttools_version,
         },
         "inputs": dict(inputs),
         "summary": dict(summary or {}),
@@ -156,9 +162,8 @@ def render_markdown(report):
     lines.append("> " + report.get("disclaimer", DISCLAIMER))
     lines.append("")
     tool = report.get("tool", {})
-    lines.append(
-        "- 版本：`%s`（fontTools `%s`）" % (tool.get("version"), tool.get("fonttools_version"))
-    )
+    # Markdown 只是渲染视图；fontTools 版本**不在报告里**（决策 D-M7-1），这里也就不渲染它。
+    lines.append("- 版本：`%s`" % (tool.get("version"),))
     inputs = report.get("inputs", {})
     if inputs:
         lines.append(

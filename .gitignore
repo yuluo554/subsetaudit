@@ -152,6 +152,7 @@ tmp-*/
 .worktrees/
 _private/
 _scratch/
+update/
 
 # 本地验证用虚拟环境（README 安装路径实测）
 .venv-readme/
