@@ -196,6 +196,7 @@ install → 生成 fixture → 位级 `--check` → 变异验证 → 离线锁�
 | 匿名验收 | **不带 token**：`api.github.com/.../releases/latest` → `tag_name=v0.1.1`、`draft=False`、3 附件；三件经**匿名** API（`Accept: application/octet-stream`）真下载，字节数全对、sha256 与 GitHub `digest` 逐字符一致、`SHA256SUMS` 自洽（`sha256sum -c` 通过）。⚠ **直链 200 未测**：本机 `github.com:443` 当刻不通（`curl` 000，同时刻 `api.github.com` 200）—— 故走匿名 API 通道，**不谎称测过直链** |
 | 干净环境装 wheel 后跑真场景 | 新建 py3.12 venv → `pip install` **匿名下载的** wheel → `--version` = `subsetaudit 0.1.1`；五子命令 `--help` 全 rc=0；真场景 `license-gate data/fixtures/fstype-nosubset/out/fstype-nosubset.ttf` → **rc=1**（如 README 所标）；装态 `report` 与 `docs/report-sample.json` **逐键一致**、`tool` 无 `fonttools_version` |
 | tag 后发布门 | 离线档 rc=0；`--online` 档 **17 PASS / 0 FAIL / rc=0**（含 `REMOTE_TAG` / `REMOTE_RELEASE assets=3` / `PUSH_RUN_PARITY` 四 ref 全绿） |
+| tag 后的留档提交 | `bb7b665`（本节回填 + §六第 11 项转「实现」）。**只改 `plan/`，交付面自 tag 起零改动**（`git diff v0.1.1 -- src tests tools data docs LICENSE pyproject.toml README.md` 为空）；`RELEASE.TAG_EXISTS` 仍 PASS（tag 是 HEAD 的祖先）。本仓惯例同 v0.1.0（tag 后另有 1 个文档提交）。`main` 上该提交的 run **39906907915** 亦 4 格全 success |
 
 ## 六、v0.1.1 · 覆盖对账
 
